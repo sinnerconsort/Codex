@@ -1,0 +1,11 @@
+{
+    "display_name": "The Codex - Character State Engine",
+    "loading_order": 115,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "sinnerconsort",
+    "version": "1.0.0",
+    "homePage": "https://github.com/sinnerconsort/codex"
+}

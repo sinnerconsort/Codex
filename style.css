@@ -1,0 +1,102 @@
+/* ═══════════════════════════════════════════════════════════════
+   THE CODEX v1 — Character State Engine
+   ══════════════════════════════════════════════════════════════ */
+
+.codex-panel {
+    position: fixed; top: 45px; left: 50%; transform: translateX(-50%);
+    width: min(94vw, 480px); max-height: calc(100vh - 110px); z-index: 100000;
+    background: var(--SmartThemeBlurTintColor, rgba(18, 18, 30, 0.97));
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6); backdrop-filter: blur(12px);
+    color: var(--SmartThemeBodyColor, #d4cfc4); font-size: 13px;
+}
+.codex-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+.codex-title { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.codex-vtag { font-size: 10px; opacity: 0.5; font-weight: 400; }
+.codex-header-btns { display: flex; gap: 6px; }
+
+/* Tabs */
+.codex-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; overflow-x: auto; }
+.codex-tab { flex: 1; min-width: 0; padding: 8px 4px; background: none; border: none; color: var(--SmartThemeBodyColor, #aaa); cursor: pointer; font-size: 11px; white-space: nowrap; border-bottom: 2px solid transparent; transition: color 0.15s; }
+.codex-tab:hover { color: #fff; }
+.codex-tab.active { color: #fff; border-bottom-color: rgba(140, 160, 200, 0.7); }
+
+/* Panes */
+.codex-pane { overflow-y: auto; padding: 12px 14px; flex: 1; min-height: 0; }
+
+/* Buttons */
+.codex-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: var(--SmartThemeBodyColor, #ccc); cursor: pointer; font-size: 12px; transition: background 0.15s; }
+.codex-btn:hover { background: rgba(255,255,255,0.12); }
+.codex-btn-primary { background: rgba(120, 140, 200, 0.2); border-color: rgba(120, 140, 200, 0.35); }
+.codex-btn-primary:hover { background: rgba(120, 140, 200, 0.3); }
+.codex-btn-danger { background: rgba(200, 80, 80, 0.15); border-color: rgba(200, 80, 80, 0.3); color: rgba(255, 140, 140, 0.9); }
+.codex-btn-sm { padding: 3px 8px; font-size: 11px; }
+.codex-icon-btn { width: 30px; height: 30px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: var(--SmartThemeBodyColor, #aaa); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; transition: background 0.15s; }
+.codex-icon-btn:hover { background: rgba(255,255,255,0.1); }
+.codex-hint { font-size: 11px; opacity: 0.5; margin-top: 2px; }
+.codex-empty { text-align: center; padding: 24px 12px; opacity: 0.5; font-size: 12px; }
+
+/* Badges */
+.codex-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.06); white-space: nowrap; }
+.codex-badge-active { border-color: rgba(120, 200, 140, 0.4); color: rgba(140, 220, 160, 0.9); background: rgba(120, 200, 140, 0.1); }
+.codex-badge-inactive { opacity: 0.5; }
+.codex-badge-danger { border-color: rgba(200, 80, 80, 0.4); color: rgba(255, 130, 130, 0.9); background: rgba(200, 80, 80, 0.1); }
+.codex-badge-source { font-size: 9px; opacity: 0.5; text-transform: uppercase; }
+
+/* ── Character Cards ─────────────────────────────────────────── */
+.codex-cast-list { display: flex; flex-direction: column; gap: 8px; }
+.codex-char-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 12px; border-left: 3px solid rgba(140, 160, 200, 0.3); transition: border-color 0.2s; }
+.codex-char-card.codex-char-active { background: rgba(120, 200, 140, 0.04); border-left-color: rgba(120, 200, 140, 0.5); border-color: rgba(120, 200, 140, 0.15); }
+.codex-char-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.codex-char-name { font-weight: 600; font-size: 14px; }
+.codex-char-btns { margin-left: auto; display: flex; gap: 3px; }
+.codex-char-mood, .codex-char-goal, .codex-char-stance, .codex-char-hiding { font-size: 12px; margin: 2px 0; opacity: 0.85; line-height: 1.4; }
+.codex-char-mood b { color: rgba(200, 180, 120, 0.9); }
+.codex-char-hiding { color: rgba(200, 130, 130, 0.8); }
+.codex-char-directive { margin-top: 6px; padding: 6px 8px; background: rgba(255,255,255,0.03); border-radius: 4px; font-size: 11px; font-style: italic; opacity: 0.7; line-height: 1.5; border-left: 2px solid rgba(140, 160, 200, 0.2); }
+.codex-char-traits { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.codex-trait { font-size: 10px; padding: 1px 6px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
+.codex-trait-active { border-color: rgba(140, 180, 220, 0.3); color: rgba(160, 200, 240, 0.8); background: rgba(140, 180, 220, 0.08); }
+.codex-trait-dormant { opacity: 0.4; text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.15); }
+
+/* ── Relationships ───────────────────────────────────────────── */
+.codex-rel-list { display: flex; flex-direction: column; gap: 6px; }
+.codex-rel-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 8px 10px; }
+.codex-rel-names { font-size: 13px; margin-bottom: 3px; }
+.codex-rel-stance { font-size: 12px; opacity: 0.7; margin-bottom: 4px; }
+.codex-rel-tension { font-size: 11px; display: flex; align-items: center; gap: 8px; }
+.codex-tension-bar { flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+.codex-tension-fill { height: 100%; border-radius: 3px; transition: width 0.3s, background 0.3s; }
+
+/* ── History ─────────────────────────────────────────────────── */
+.codex-history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; }
+.codex-history-list { display: flex; flex-direction: column; gap: 2px; }
+.codex-history-entry { font-size: 11px; padding: 3px 6px; border-radius: 3px; line-height: 1.5; }
+.codex-history-entry:nth-child(odd) { background: rgba(255,255,255,0.02); }
+.codex-hist-time { opacity: 0.4; margin-right: 6px; }
+.codex-hist-field { color: rgba(140, 180, 220, 0.7); }
+.codex-hist-old { opacity: 0.4; text-decoration: line-through; }
+.codex-hist-new { color: rgba(160, 220, 180, 0.8); }
+
+/* ── Import ──────────────────────────────────────────────────── */
+.codex-import-section { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.codex-import-section:last-child { border-bottom: none; }
+.codex-import-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.codex-manual-form { display: flex; flex-direction: column; gap: 6px; }
+.codex-manual-form input, .codex-manual-form textarea { width: 100%; padding: 6px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; color: inherit; font-size: 12px; font-family: inherit; box-sizing: border-box; }
+.codex-manual-form textarea { resize: vertical; min-height: 60px; }
+
+/* ── Settings ────────────────────────────────────────────────── */
+.codex-settings-pane .codex-sg { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.codex-settings-pane .codex-sg:last-child { border-bottom: none; }
+.codex-sl { font-size: 12px; margin-bottom: 4px; }
+.codex-check { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
+.codex-settings-pane input[type="range"] { width: 100%; margin: 4px 0; }
+.codex-settings-pane select { width: 100%; padding: 5px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; color: inherit; font-size: 12px; }
+
+/* ── Mobile ──────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .codex-panel { width: 98vw; top: 35px; max-height: calc(100vh - 90px); border-radius: 10px; }
+    .codex-tab { font-size: 10px; padding: 7px 3px; }
+}
