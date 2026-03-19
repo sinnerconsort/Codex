@@ -43,6 +43,7 @@
 .codex-badge-inactive { opacity: 0.5; }
 .codex-badge-danger { border-color: rgba(200, 80, 80, 0.4); color: rgba(255, 130, 130, 0.9); background: rgba(200, 80, 80, 0.1); }
 .codex-badge-source { font-size: 9px; opacity: 0.5; text-transform: uppercase; }
+.codex-badge-pinned { border-color: rgba(200, 180, 120, 0.4); color: rgba(220, 200, 140, 0.9); background: rgba(200, 180, 120, 0.1); }
 
 /* ── Character Cards ─────────────────────────────────────────── */
 .codex-cast-list { display: flex; flex-direction: column; gap: 8px; }

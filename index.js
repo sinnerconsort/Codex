@@ -88,6 +88,7 @@ const DEFAULT_SETTINGS = {
 
 const DEFAULT_CHAT_STATE = {
     activeCharacters: [],
+    manuallyPinned: [],
     sceneContext: '',
     lastUpdateAt: 0,
     lastUpdateTime: 0,
@@ -121,6 +122,7 @@ function sanitizeChatState() {
     const cs = getChatState();
     for (const key in DEFAULT_CHAT_STATE) { if (cs[key] === undefined) cs[key] = JSON.parse(JSON.stringify(DEFAULT_CHAT_STATE[key])); }
     if (!Array.isArray(cs.activeCharacters)) cs.activeCharacters = [];
+    if (!Array.isArray(cs.manuallyPinned)) cs.manuallyPinned = [];
     if (!Array.isArray(cs.characterHistory)) cs.characterHistory = [];
 }
 
@@ -232,8 +234,10 @@ function detectByKeyword(allChars) {
     const recentText = (ctx?.chat || []).slice(-3).map(m => m.mes || '').join(' ').toLowerCase();
     const detected = [];
     for (const char of allChars) {
+        // Exact full name + exact alias matches only — this is a dumb fallback
+        // AI detection handles partial names, nicknames, and pronouns properly
         const names = [char.name, ...(char.aliases || [])];
-        if (names.some(n => recentText.includes(n.toLowerCase()))) {
+        if (names.some(n => n.length > 2 && recentText.includes(n.toLowerCase()))) {
             detected.push(char.id);
         }
     }
@@ -324,7 +328,11 @@ async function runUpdateCycle(options = {}) {
 
         // Detect who's in the scene
         const activeIds = await detectActiveCharacters();
-        cs.activeCharacters = activeIds;
+        
+        // Merge with manually pinned characters (manual override survives detection)
+        const pinned = cs.manuallyPinned || [];
+        const mergedIds = [...new Set([...activeIds, ...pinned])];
+        cs.activeCharacters = mergedIds;
 
         // Mark characters active/inactive
         for (const char of getAllCharacters()) {
@@ -918,8 +926,17 @@ function bindPanelEvents() {
     $(document).on('click', '.codex-char-toggle', function () {
         const id = $(this).data('id');
         const cs = getChatState();
-        if (cs.activeCharacters.includes(id)) cs.activeCharacters = cs.activeCharacters.filter(i => i !== id);
-        else cs.activeCharacters.push(id);
+        if (!Array.isArray(cs.manuallyPinned)) cs.manuallyPinned = [];
+        
+        if (cs.activeCharacters.includes(id)) {
+            // Remove from active AND from manual pins
+            cs.activeCharacters = cs.activeCharacters.filter(i => i !== id);
+            cs.manuallyPinned = cs.manuallyPinned.filter(i => i !== id);
+        } else {
+            // Add to active AND to manual pins so it survives detection
+            cs.activeCharacters.push(id);
+            if (!cs.manuallyPinned.includes(id)) cs.manuallyPinned.push(id);
+        }
         const char = getSettings().characters[id];
         if (char) char.active = cs.activeCharacters.includes(id);
         saveChatData(); saveSettings(); renderCast();
@@ -940,16 +957,19 @@ function renderCast() {
     const cs = getChatState();
     const html = chars.map(c => {
         const isActive = cs.activeCharacters?.includes(c.id);
+        const isPinned = (cs.manuallyPinned || []).includes(c.id);
         const traits = (c.activeTraits || []).slice(0, 4).map(t => `<span class="codex-trait codex-trait-active">${xss(t)}</span>`).join('');
         const dormant = (c.dormantTraits || []).slice(0, 3).map(t => `<span class="codex-trait codex-trait-dormant">${xss(t)}</span>`).join('');
         const secretBadge = c.secretsAtRisk > 0 ? `<span class="codex-badge codex-badge-danger">⚠ ${c.secretsAtRisk} secret${c.secretsAtRisk > 1 ? 's' : ''} at risk</span>` : '';
         const sourceBadge = `<span class="codex-badge codex-badge-source">${c.source}</span>`;
+        const pinnedBadge = isPinned ? '<span class="codex-badge codex-badge-pinned">📌 pinned</span>' : '';
+        const statusBadge = isActive ? '<span class="codex-badge codex-badge-active">● in scene</span>' : '<span class="codex-badge codex-badge-inactive">○ offscreen</span>';
 
         return `
 <div class="codex-char-card ${isActive ? 'codex-char-active' : ''}" data-id="${xss(c.id)}">
   <div class="codex-char-header">
     <span class="codex-char-name">${xss(c.name)}</span>
-    ${isActive ? '<span class="codex-badge codex-badge-active">● in scene</span>' : '<span class="codex-badge codex-badge-inactive">○ offscreen</span>'}
+    ${statusBadge} ${pinnedBadge}
     ${secretBadge} ${sourceBadge}
     <div class="codex-char-btns">
       <button class="codex-icon-btn codex-char-toggle" data-id="${xss(c.id)}" title="${isActive ? 'Remove from scene' : 'Add to scene'}"><i class="fa-solid fa-${isActive ? 'eye-slash' : 'eye'}"></i></button>
