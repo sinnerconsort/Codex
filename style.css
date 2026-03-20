@@ -117,3 +117,17 @@
 
 /* Input field for import */
 .codex-input { width: 100%; padding: 6px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; color: inherit; font-size: 12px; font-family: inherit; box-sizing: border-box; margin-bottom: 6px; }
+
+/* ── Character Edit Form ─────────────────────────────────── */
+.codex-char-edit-form {
+    margin-top: 8px; padding: 8px; border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex; flex-direction: column; gap: 4px;
+}
+.codex-edit-label { font-size: 10px; opacity: 0.6; margin-top: 2px; }
+.codex-edit-input {
+    width: 100%; padding: 5px 8px; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 5px;
+    color: inherit; font-size: 12px; box-sizing: border-box;
+}
+.codex-edit-save { margin-top: 4px; align-self: flex-end; }
+.codex-char-edit:hover { color: rgba(180, 160, 220, 0.9); }

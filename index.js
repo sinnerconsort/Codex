@@ -945,6 +945,43 @@ function bindPanelEvents() {
         }
         saveChatData(); renderCast();
     });
+    // Edit toggle
+    $(document).on('click', '.codex-char-edit', function(e) {
+        e.stopPropagation();
+        const id = $(this).data('id');
+        const form = $(`.codex-char-edit-form[data-id="${id}"]`);
+        // Close any other open forms
+        $('.codex-char-edit-form').not(form).slideUp(100);
+        form.slideToggle(150);
+    });
+    // Edit save
+    $(document).on('click', '.codex-edit-save', function(e) {
+        e.stopPropagation();
+        const id = $(this).data('id');
+        const form = $(`.codex-char-edit-form[data-id="${id}"]`);
+        const s = getSettings();
+        const char = s.characters[id];
+        if (!char) return;
+
+        const newWorld = form.find('.codex-edit-world').val().trim() || 'Uncategorized';
+        const newAliases = form.find('.codex-edit-aliases').val().split(',').map(a => a.trim()).filter(Boolean);
+        const newName = form.find('.codex-edit-name').val().trim();
+
+        if (newName && newName !== char.name) char.name = newName;
+        char.aliases = newAliases;
+        const oldWorld = char.world;
+        char.world = newWorld;
+
+        // Update worlds list
+        if (!s.worlds.includes(newWorld)) s.worlds.push(newWorld);
+        // Clean empty worlds
+        const usedWorlds = new Set(Object.values(s.characters).map(c => c.world));
+        s.worlds = s.worlds.filter(w => usedWorlds.has(w));
+
+        saveGlobal();
+        toastr.success(`${char.name} updated${oldWorld !== newWorld ? ` → ${newWorld}` : ''}`, 'Codex', { timeOut: 2000 });
+        renderCast();
+    });
     // World group collapse toggle
     $(document).on('click', '.codex-world-header', function() {
         const world = $(this).data('world');
@@ -1006,6 +1043,7 @@ function renderCast() {
     ${statusBadge} ${pinBadge} ${secretBadge}
     <span class="codex-badge codex-badge-source">${g.source}</span>
     <div class="codex-char-btns">
+      <button class="codex-icon-btn codex-char-edit" data-id="${xss(g.id)}" title="Edit"><i class="fa-solid fa-pen"></i></button>
       <button class="codex-icon-btn codex-char-toggle" data-id="${xss(g.id)}" title="${isActive?'Remove':'Add'}"><i class="fa-solid fa-${isActive?'eye-slash':'eye'}"></i></button>
       <button class="codex-icon-btn codex-char-delete" data-id="${xss(g.id)}" title="Delete"><i class="fa-solid fa-trash"></i></button>
     </div>
@@ -1016,6 +1054,15 @@ function renderCast() {
   ${state.hiding && state.hiding !== 'nothing' ? `<div class="codex-char-hiding">Hiding: ${xss(state.hiding)}</div>` : ''}
   ${traits || dormant ? `<div class="codex-char-traits">${traits} ${dormant}</div>` : ''}
   ${state.directive ? `<div class="codex-char-directive">${xss(state.directive.substring(0, 200))}${state.directive.length > 200 ? '…' : ''}</div>` : ''}
+  <div class="codex-char-edit-form" data-id="${xss(g.id)}" style="display:none;">
+    <label class="codex-edit-label">World/Group</label>
+    <input type="text" class="codex-edit-input codex-edit-world" value="${xss(g.world || '')}" placeholder="World name" />
+    <label class="codex-edit-label">Aliases <span style="opacity:0.5">(comma separated)</span></label>
+    <input type="text" class="codex-edit-input codex-edit-aliases" value="${xss((g.aliases||[]).join(', '))}" placeholder="Nicknames, titles..." />
+    <label class="codex-edit-label">Name</label>
+    <input type="text" class="codex-edit-input codex-edit-name" value="${xss(g.name)}" />
+    <button class="codex-btn codex-btn-primary codex-edit-save" data-id="${xss(g.id)}"><i class="fa-solid fa-check"></i> Save</button>
+  </div>
 </div>`;
             }
             html += '</div>';
