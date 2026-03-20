@@ -176,19 +176,35 @@ async function callAI(prompt, maxTokens = 500) {
     const ctx = getContext();
     const settings = getSettings();
 
+    // Try Connection Manager first
     if (ctx?.ConnectionManagerRequestService) {
         const profileId = resolveProfileId(settings.selectedProfile, ctx);
         if (profileId) {
             try {
                 const response = await ctx.ConnectionManagerRequestService.sendRequest(
                     profileId, [{ role: 'user', content: prompt }], maxTokens,
-                    { extractData: true, includePreset: false, includeInstruct: false }, {}
+                    { extractData: true, includePreset: true, includeInstruct: false }, {}
                 );
                 if (response?.content) return response.content;
-            } catch (err) { console.warn('[Codex] CMRS failed, fallback:', err.message); }
+                console.warn('[Codex] CMRS returned empty content');
+            } catch (err) {
+                console.warn('[Codex] CMRS failed:', err.message);
+                toastr.warning(`Codex API call failed: ${err.message}`, 'Codex', { timeOut: 4000 });
+            }
+        } else {
+            console.warn('[Codex] Could not resolve profile:', settings.selectedProfile);
         }
     }
-    return await generateRaw(prompt, null, false, false, '', maxTokens);
+
+    // Fallback to generateRaw
+    try {
+        const result = await generateRaw(prompt, null, false, false, '', maxTokens);
+        if (result) return result;
+    } catch (err) {
+        console.error('[Codex] generateRaw also failed:', err);
+        toastr.error('Codex: All API methods failed', 'Codex', { timeOut: 5000 });
+    }
+    return null;
 }
 
 function resolveProfileId(profileName, ctx) {
@@ -334,23 +350,32 @@ async function runUpdateCycle(options = {}) {
         const mergedIds = [...new Set([...activeIds, ...pinned])];
         cs.activeCharacters = mergedIds;
 
-        // Mark characters active/inactive
+        // Mark characters active/inactive using MERGED list (includes pins)
         for (const char of getAllCharacters()) {
-            const wasActive = char.active;
-            char.active = activeIds.includes(char.id);
+            char.active = mergedIds.includes(char.id);
             if (char.active) {
-                char.detectedVia = settings.sceneDetection;
+                char.detectedVia = pinned.includes(char.id) ? 'manual' : settings.sceneDetection;
                 char.lastActiveMessage = ctx?.chat?.length || 0;
             }
             if (!char.active) char.scenesSinceUpdate++;
         }
 
-        // Update active characters (up to limit)
-        const toUpdate = activeIds.slice(0, settings.maxSimultaneousUpdates);
+        // Update active characters from MERGED list (up to limit)
+        const toUpdate = mergedIds.slice(0, settings.maxSimultaneousUpdates);
+        
+        if (options.force) {
+            toastr.info(`Detected ${activeIds.length} + ${pinned.length} pinned = ${mergedIds.length} active. Updating ${toUpdate.length}...`, 'Codex', { timeOut: 3000 });
+        }
+        
         for (const charId of toUpdate) {
             const char = settings.characters[charId];
             if (!char) continue;
-            await updateCharacterState(char);
+            // Skip characters with no core text
+            if (!char.core) { 
+                if (options.force) toastr.warning(`${char.name} has no core text — skipping`, 'Codex', { timeOut: 3000 });
+                continue; 
+            }
+            await updateCharacterState(char, options.force);
         }
 
         // Offscreen updates if enabled
@@ -382,9 +407,11 @@ async function runUpdateCycle(options = {}) {
     }
 }
 
-async function updateCharacterState(char) {
+async function updateCharacterState(char, verbose = false) {
     const context = getRecentContext(3);
     const settings = getSettings();
+
+    if (verbose) toastr.info(`Updating ${char.name}...`, 'Codex', { timeOut: 2000 });
 
     // Check Lexicon secrets
     let secretContext = '';
@@ -408,7 +435,7 @@ async function updateCharacterState(char) {
     const prompt = `You are maintaining the living psychology of a character in an ongoing roleplay story. Update their internal state based on what just happened.
 
 CHARACTER: ${char.name}
-CORE IDENTITY: ${char.core}
+CORE IDENTITY: ${(char.core || '').substring(0, 1500)}
 
 CURRENT STATE:
   Mood: ${char.currentMood || 'unknown'}
@@ -424,7 +451,7 @@ ${relContext}${secretContext}
 WHAT JUST HAPPENED:
 ${context}
 
-Update their state. Return ONLY valid JSON:
+Update their state. Return ONLY valid JSON with no other text, no markdown fences, no explanation:
 {
   "currentMood": "1-4 words",
   "activeGoal": "one sentence",
@@ -440,8 +467,17 @@ Update their state. Return ONLY valid JSON:
 
     try {
         const response = await callAI(prompt, 600);
+        if (!response) {
+            if (verbose) toastr.error(`No response for ${char.name}`, 'Codex', { timeOut: 4000 });
+            return;
+        }
+        
         const data = parseJsonObject(response);
-        if (!data) { console.warn(`[Codex] Could not parse update for ${char.name}`); return; }
+        if (!data) {
+            if (verbose) toastr.warning(`Parse failed for ${char.name}: ${(response || '').substring(0, 60)}...`, 'Codex', { timeOut: 5000 });
+            console.warn(`[Codex] Unparseable update for ${char.name}:`, response?.substring(0, 200));
+            return;
+        }
 
         // Apply updates with history tracking
         const fields = ['currentMood', 'activeGoal', 'stance', 'hiding', 'fear', 'recentMemory', 'directive'];
@@ -469,9 +505,12 @@ Update their state. Return ONLY valid JSON:
         char.lastUpdated = Date.now();
         char.updateCount++;
         char.scenesSinceUpdate = 0;
+        
+        if (verbose) toastr.success(`${char.name} updated — mood: ${char.currentMood}`, 'Codex', { timeOut: 2000 });
 
     } catch (err) {
         console.error(`[Codex] Update failed for ${char.name}:`, err);
+        if (verbose) toastr.error(`Update error for ${char.name}: ${err.message}`, 'Codex', { timeOut: 5000 });
     }
 }
 
@@ -622,13 +661,16 @@ function createBlankPage(name, source = 'manual') {
 }
 
 async function generateInitialState(char) {
-    if (!char.core) return;
+    if (!char.core) { console.warn(`[Codex] No core text for ${char.name}, skipping`); return; }
+    
+    toastr.info(`Analyzing ${char.name}...`, 'Codex', { timeOut: 2000 });
+    
     const prompt = `Given this character description, extract their likely initial psychological state. This is for a roleplay story — think about who they are beneath the surface.
 
 CHARACTER: ${char.name}
 DESCRIPTION: ${char.core.substring(0, 1500)}
 
-Return ONLY valid JSON:
+Return ONLY valid JSON with no other text, no markdown fences, no explanation:
 {
   "currentMood": "their likely default emotional state",
   "activeGoal": "what they generally want",
@@ -637,23 +679,40 @@ Return ONLY valid JSON:
   "fear": "their core fear or vulnerability",
   "activeTraits": ["3-4 dominant personality traits"],
   "dormantTraits": ["3-4 traits that exist but don't always show"],
-  "aliases": ["any nicknames, titles, or shortened names"],
+  "aliases": ["any nicknames, titles, or shortened names from the description"],
   "directive": "2-3 sentences describing their default behavior — how they carry themselves, speak, and interact"
 }`;
 
     try {
-        const response = await callAI(prompt, 500);
-        const data = parseJsonObject(response);
-        if (!data) return;
-
-        for (const key of ['currentMood', 'activeGoal', 'stance', 'hiding', 'fear', 'directive']) {
-            if (data[key]) char[key] = data[key];
+        const response = await callAI(prompt, 600);
+        if (!response) {
+            toastr.error(`No response for ${char.name} — check connection profile`, 'Codex', { timeOut: 5000 });
+            return;
         }
-        if (Array.isArray(data.activeTraits)) char.activeTraits = data.activeTraits;
-        if (Array.isArray(data.dormantTraits)) char.dormantTraits = data.dormantTraits;
-        if (Array.isArray(data.aliases)) char.aliases = data.aliases;
+        
+        const data = parseJsonObject(response);
+        if (!data) {
+            toastr.warning(`Couldn't parse response for ${char.name}. Raw: ${(response || '').substring(0, 80)}...`, 'Codex', { timeOut: 6000 });
+            console.warn('[Codex] Unparseable response for', char.name, ':', response?.substring(0, 200));
+            return;
+        }
+
+        let fieldsSet = 0;
+        for (const key of ['currentMood', 'activeGoal', 'stance', 'hiding', 'fear', 'directive']) {
+            if (data[key]) { char[key] = data[key]; fieldsSet++; }
+        }
+        if (Array.isArray(data.activeTraits)) { char.activeTraits = data.activeTraits; fieldsSet++; }
+        if (Array.isArray(data.dormantTraits)) { char.dormantTraits = data.dormantTraits; fieldsSet++; }
+        if (Array.isArray(data.aliases) && data.aliases.length > 0) { char.aliases = data.aliases; fieldsSet++; }
+        
+        if (fieldsSet > 0) {
+            toastr.success(`${char.name}: ${fieldsSet} fields populated`, 'Codex', { timeOut: 2000 });
+        } else {
+            toastr.warning(`${char.name}: JSON parsed but no usable fields`, 'Codex', { timeOut: 4000 });
+        }
     } catch (err) {
-        console.warn(`[Codex] Initial state generation failed for ${char.name}:`, err);
+        console.error(`[Codex] Initial state generation failed for ${char.name}:`, err);
+        toastr.error(`Failed for ${char.name}: ${err.message}`, 'Codex', { timeOut: 5000 });
     }
 }
 
@@ -879,7 +938,25 @@ function gotoTab(name) {
 
 function bindPanelEvents() {
     $('#codex-close').on('click', () => $('#codex-panel').fadeOut(150));
-    $('#codex-refresh').on('click', async () => { toastr.info('Updating characters...', '', { timeOut: 2000 }); await runUpdateCycle({ force: true }); renderCast(); });
+    $('#codex-refresh').on('click', async () => {
+        const settings = getSettings();
+        const chars = getAllCharacters();
+        
+        // First: regenerate initial states for any characters with blank fields
+        const blankChars = chars.filter(c => c.core && !c.currentMood && !c.directive);
+        if (blankChars.length > 0) {
+            toastr.info(`Generating states for ${blankChars.length} blank character(s)...`, 'Codex', { timeOut: 3000 });
+            for (const char of blankChars) {
+                await generateInitialState(char);
+            }
+            saveSettings();
+        }
+        
+        // Then: run normal update cycle
+        toastr.info('Running update cycle...', 'Codex', { timeOut: 2000 });
+        await runUpdateCycle({ force: true });
+        renderCast();
+    });
     $(document).on('click', '.codex-tab[data-tab]', function () { gotoTab($(this).data('tab')); });
 
     // Import
