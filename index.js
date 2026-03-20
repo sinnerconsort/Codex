@@ -128,9 +128,9 @@ function getRecentCtx(n = 3) { const ctx = getContext(); if (!ctx?.chat?.length)
 async function profileAutopsy(charId) {
     const g = getSettings().characters[charId]; if (!g?.core) return;
     toastr.info('Deep-reading ' + g.name + '...', 'Codex', { timeOut: 3000 });
-    const prompt = 'Analyze this character for a roleplay engine. Extract psychology, behavior, secrets.\n\nCHARACTER: ' + g.name + '\nSOURCE:\n' + g.core.substring(0, 2500) + '\n\nReturn ONLY valid JSON:\n{"archetype":"behavioral description not a label","emotionalCore":"deepest vulnerability","coreTraits":["4-5 traits"],"habits":["3-4 things they DO"],"mannerisms":["3-4 speech/body tells"],"aliases":["nicknames"],"secrets":[{"content":"...","tier":"surface|core|buried","behavioralTell":"...","ifRevealed":"..."}],"currentMood":"default state","activeGoal":"...","stance":"...","hiding":"...","fear":"...","activeTraits":["3-4"],"dormantTraits":["3-4"],"directive":"2-3 sentences: behavior, body language, speech","baseRelationships":{"Name":{"stance":"...","tension":0-10}}}';
+    const prompt = 'Analyze this character for a roleplay engine. Extract psychology, behavior, secrets.\n\nCHARACTER: ' + g.name + '\nSOURCE:\n' + g.core.substring(0, 3500) + '\n\nReturn ONLY valid JSON:\n{"archetype":"behavioral description not a label","emotionalCore":"deepest vulnerability","coreTraits":["4-5 traits"],"habits":["3-4 things they DO"],"mannerisms":["3-4 speech/body tells"],"aliases":["nicknames"],"secrets":[{"content":"...","tier":"surface|core|buried","behavioralTell":"...","ifRevealed":"..."}],"currentMood":"default state","activeGoal":"...","stance":"...","hiding":"...","fear":"...","activeTraits":["3-4"],"dormantTraits":["3-4"],"directive":"2-3 sentences: behavior, body language, speech","baseRelationships":{"Name":{"stance":"...","tension":0-10}}}';
     try {
-        const r = await callAI(prompt, 1000);
+        const r = await callAI(prompt, 1500);
         if (!r) { toastr.error('No response for ' + g.name, 'Codex'); return; }
         const data = parseJson(r);
         if (!data) { toastr.warning('Parse failed: ' + r.substring(0, 60), 'Codex', { timeOut: 5000 }); return; }
@@ -142,9 +142,9 @@ async function profileAutopsy(charId) {
 async function profileCollab(charId, hints) {
     const g = getSettings().characters[charId]; if (!g?.core) return;
     toastr.info('Collaborating on ' + g.name + '...', 'Codex', { timeOut: 3000 });
-    const prompt = 'Build a deep profile using source text AND user guidance.\n\nCHARACTER: ' + g.name + '\nSOURCE:\n' + g.core.substring(0, 2000) + '\n\nUSER NOTES:\n' + hints + '\n\nReturn ONLY valid JSON:\n{"archetype":"...","emotionalCore":"...","coreTraits":["4-5"],"habits":["3-4"],"mannerisms":["3-4"],"aliases":["..."],"secrets":[{"content":"...","tier":"surface|core|buried","behavioralTell":"...","ifRevealed":"..."}],"currentMood":"...","activeGoal":"...","stance":"...","hiding":"...","fear":"...","activeTraits":["3-4"],"dormantTraits":["3-4"],"directive":"2-3 sentences","baseRelationships":{"Name":{"stance":"...","tension":0-10}}}';
+    const prompt = 'Build a deep profile using source text AND user guidance.\n\nCHARACTER: ' + g.name + '\nSOURCE:\n' + g.core.substring(0, 3000) + '\n\nUSER NOTES:\n' + hints + '\n\nReturn ONLY valid JSON:\n{"archetype":"...","emotionalCore":"...","coreTraits":["4-5"],"habits":["3-4"],"mannerisms":["3-4"],"aliases":["..."],"secrets":[{"content":"...","tier":"surface|core|buried","behavioralTell":"...","ifRevealed":"..."}],"currentMood":"...","activeGoal":"...","stance":"...","hiding":"...","fear":"...","activeTraits":["3-4"],"dormantTraits":["3-4"],"directive":"2-3 sentences","baseRelationships":{"Name":{"stance":"...","tension":0-10}}}';
     try {
-        const r = await callAI(prompt, 1000);
+        const r = await callAI(prompt, 1500);
         if (!r) { toastr.error('No response', 'Codex'); return; }
         const data = parseJson(r);
         if (!data) { toastr.warning('Parse failed', 'Codex', { timeOut: 5000 }); return; }
@@ -349,8 +349,8 @@ async function importFromSTCards(worldName) {
     for (const card of ctx.characters) {
         if (!card?.name) continue;
         if (Object.values(s.characters).some(c => c.name === card.name)) continue;
-        const desc = (card.data?.description || card.description || '').substring(0, 2000);
-        const personality = (card.data?.personality || card.personality || '').substring(0, 1000);
+        const desc = (card.data?.description || card.description || '').substring(0, 3000);
+        const personality = (card.data?.personality || card.personality || '').substring(0, 1500);
         const core = [desc, personality].filter(Boolean).join('\n\n');
         if (!core.trim()) continue;
         const ch = newGlobalCharacter(card.name, 'character_card');
@@ -367,6 +367,43 @@ async function importFromSTCards(worldName) {
         saveGlobal(); saveChatData();
     }
     return count;
+}
+
+async function importSingleCard(cardName, worldName) {
+    const ctx = getContext(), s = getSettings();
+    if (!ctx?.characters?.length) { toastr.info('No characters loaded', 'Codex'); return 0; }
+    const card = ctx.characters.find(c => c?.name === cardName);
+    if (!card) { toastr.warning('Card not found: ' + cardName, 'Codex'); return 0; }
+    if (Object.values(s.characters).some(c => c.name === card.name)) { toastr.info(card.name + ' already imported', 'Codex'); return 0; }
+
+    const desc = (card.data?.description || card.description || '').substring(0, 3000);
+    const personality = (card.data?.personality || card.personality || '').substring(0, 1500);
+    const scenario = (card.data?.scenario || card.scenario || '').substring(0, 500);
+    const core = [desc, personality, scenario].filter(Boolean).join('\n\n');
+    if (!core.trim()) { toastr.warning('Card has no description', 'Codex'); return 0; }
+
+    const world = worldName || 'ST Cards';
+    if (!s.worlds.includes(world)) s.worlds.push(world);
+    const ch = newGlobalCharacter(card.name, 'character_card');
+    ch.core = core; ch.world = world;
+    s.characters[ch.id] = ch;
+    saveGlobal();
+    await profileAutopsy(ch.id);
+    saveGlobal(); saveChatData();
+    toastr.success(card.name + ' imported -> ' + world, 'Codex', { timeOut: 3000 });
+    return 1;
+}
+
+function populateCardPicker() {
+    const ctx = getContext(), $picker = $('#codex-card-picker');
+    $picker.empty().append('<option value="">Select a character...</option>');
+    if (!ctx?.characters?.length) return;
+    const existing = new Set(Object.values(getSettings().characters).map(c => c.name));
+    for (const card of ctx.characters) {
+        if (!card?.name) continue;
+        const imported = existing.has(card.name);
+        $picker.append('<option value="' + xss(card.name) + '"' + (imported ? ' disabled style="opacity:0.4;"' : '') + '>' + xss(card.name) + (imported ? ' (imported)' : '') + '</option>');
+    }
 }
 
 function shouldUpdate() {
@@ -418,13 +455,13 @@ let currentDossier = null;
 
 function createPanel() {
     if ($('#codex-panel').length) return;
-    $('body').append('<div id="codex-panel" class="codex-panel" style="display:none;"><div class="codex-header"><span class="codex-title"><i class="fa-solid fa-users"></i> ' + EXT_NAME + ' <span class="codex-vtag">v2.1</span></span><div class="codex-header-btns"><button class="codex-icon-btn" id="codex-refresh" title="Update"><i class="fa-solid fa-arrows-rotate"></i></button><button class="codex-icon-btn" id="codex-close"><i class="fa-solid fa-xmark"></i></button></div></div><div class="codex-tabs"><button class="codex-tab active" data-tab="cast">Cast</button><button class="codex-tab" data-tab="relationships">Relations</button><button class="codex-tab" data-tab="history">History</button><button class="codex-tab" data-tab="import">Import</button><button class="codex-tab" data-tab="settings">Settings</button></div><div class="codex-pane" id="codex-pane-cast"><div id="codex-cast-list"></div></div><div class="codex-pane" id="codex-pane-dossier" style="display:none;"><div id="codex-dossier-content"></div></div><div class="codex-pane" id="codex-pane-relationships" style="display:none;"><div id="codex-rel-list"></div></div><div class="codex-pane" id="codex-pane-history" style="display:none;"><div class="codex-history-header"><span>Log</span><button class="codex-btn codex-btn-sm" id="codex-history-clear">Clear</button></div><div id="codex-history-list"></div></div><div class="codex-pane" id="codex-pane-import" style="display:none;"><div class="codex-import-section"><b>From Lexicon</b><input type="text" id="codex-import-world" class="codex-input" placeholder="World name"/><button class="codex-btn codex-btn-primary" id="codex-import-lexicon">Import from Lexicon</button></div><div class="codex-import-section"><b>From ST Character Cards</b><p style="font-size:11px;opacity:0.5;margin:2px 0 6px;">Import loaded character cards / group members.</p><button class="codex-btn codex-btn-primary" id="codex-import-cards">Import from Cards</button></div><div class="codex-import-section"><b>Manual</b><input type="text" id="codex-m-name" class="codex-input" placeholder="Name"/><textarea id="codex-m-core" class="codex-input" rows="3" placeholder="Description"></textarea><input type="text" id="codex-m-aliases" class="codex-input" placeholder="Aliases (comma separated)"/><input type="text" id="codex-m-world" class="codex-input" placeholder="World"/><button class="codex-btn codex-btn-primary" id="codex-m-save">Create</button></div></div><div class="codex-pane codex-settings-pane" id="codex-pane-settings" style="display:none;"><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-enabled"/> <b>Enable</b></label></div><div class="codex-sg"><b>Update:</b> <label class="codex-check"><input type="radio" name="codex-update" value="every_message"/> Every msg</label><label class="codex-check"><input type="radio" name="codex-update" value="on_mention"/> Mention</label><label class="codex-check"><input type="radio" name="codex-update" value="every_n"/> Every N</label><label class="codex-check"><input type="radio" name="codex-update" value="manual"/> Manual</label></div><div class="codex-sg"><b>Detection:</b> <label class="codex-check"><input type="radio" name="codex-detect" value="ai"/> AI</label><label class="codex-check"><input type="radio" name="codex-detect" value="keyword"/> KW</label><label class="codex-check"><input type="radio" name="codex-detect" value="manual"/> Manual</label></div><div class="codex-sg"><b>Max</b> <span id="codex-max-val">3</span><input type="range" id="codex-s-max" min="1" max="6" value="3"/></div><div class="codex-sg"><b>Depth</b> <span id="codex-depth-val">1</span><input type="range" id="codex-s-depth" min="0" max="6" value="1"/></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-rels"/> Relationships</label></div><div class="codex-sg"><b>Profile</b><select id="codex-s-profile"><option value="current">Current</option></select></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-lexicon"/> Lexicon</label></div><div class="codex-sg"><button class="codex-btn codex-btn-danger" id="codex-clear-all">Clear all</button></div></div></div>');
+    $('body').append('<div id="codex-panel" class="codex-panel" style="display:none;"><div class="codex-header"><span class="codex-title"><i class="fa-solid fa-users"></i> ' + EXT_NAME + ' <span class="codex-vtag">v2.1</span></span><div class="codex-header-btns"><button class="codex-icon-btn" id="codex-refresh" title="Update"><i class="fa-solid fa-arrows-rotate"></i></button><button class="codex-icon-btn" id="codex-close"><i class="fa-solid fa-xmark"></i></button></div></div><div class="codex-tabs"><button class="codex-tab active" data-tab="cast">Cast</button><button class="codex-tab" data-tab="relationships">Relations</button><button class="codex-tab" data-tab="history">History</button><button class="codex-tab" data-tab="import">Import</button><button class="codex-tab" data-tab="settings">Settings</button></div><div class="codex-pane" id="codex-pane-cast"><div id="codex-cast-list"></div></div><div class="codex-pane" id="codex-pane-dossier" style="display:none;"><div id="codex-dossier-content"></div></div><div class="codex-pane" id="codex-pane-relationships" style="display:none;"><div id="codex-rel-list"></div></div><div class="codex-pane" id="codex-pane-history" style="display:none;"><div class="codex-history-header"><span>Log</span><button class="codex-btn codex-btn-sm" id="codex-history-clear">Clear</button></div><div id="codex-history-list"></div></div><div class="codex-pane" id="codex-pane-import" style="display:none;"><div class="codex-import-section"><b>From Lexicon</b><input type="text" id="codex-import-world" class="codex-input" placeholder="World name"/><button class="codex-btn codex-btn-primary" id="codex-import-lexicon">Import from Lexicon</button></div><div class="codex-import-section"><b>From ST Character Cards</b><p style="font-size:11px;opacity:0.5;margin:2px 0 6px;">Pick a card or import all.</p><select id="codex-card-picker" class="codex-input"><option value="">Select a character...</option></select><button class="codex-btn codex-btn-primary" id="codex-import-one-card">Import Selected</button><button class="codex-btn" id="codex-import-cards" style="margin-top:4px;">Import All Cards</button></div><div class="codex-import-section"><b>Manual</b><input type="text" id="codex-m-name" class="codex-input" placeholder="Name"/><textarea id="codex-m-core" class="codex-input" rows="3" placeholder="Description"></textarea><input type="text" id="codex-m-aliases" class="codex-input" placeholder="Aliases (comma separated)"/><input type="text" id="codex-m-world" class="codex-input" placeholder="World"/><button class="codex-btn codex-btn-primary" id="codex-m-save">Create</button></div></div><div class="codex-pane codex-settings-pane" id="codex-pane-settings" style="display:none;"><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-enabled"/> <b>Enable</b></label></div><div class="codex-sg"><b>Update:</b> <label class="codex-check"><input type="radio" name="codex-update" value="every_message"/> Every msg</label><label class="codex-check"><input type="radio" name="codex-update" value="on_mention"/> Mention</label><label class="codex-check"><input type="radio" name="codex-update" value="every_n"/> Every N</label><label class="codex-check"><input type="radio" name="codex-update" value="manual"/> Manual</label></div><div class="codex-sg"><b>Detection:</b> <label class="codex-check"><input type="radio" name="codex-detect" value="ai"/> AI</label><label class="codex-check"><input type="radio" name="codex-detect" value="keyword"/> KW</label><label class="codex-check"><input type="radio" name="codex-detect" value="manual"/> Manual</label></div><div class="codex-sg"><b>Max</b> <span id="codex-max-val">3</span><input type="range" id="codex-s-max" min="1" max="6" value="3"/></div><div class="codex-sg"><b>Depth</b> <span id="codex-depth-val">1</span><input type="range" id="codex-s-depth" min="0" max="6" value="1"/></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-rels"/> Relationships</label></div><div class="codex-sg"><b>Profile</b><select id="codex-s-profile"><option value="current">Current</option></select></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-lexicon"/> Lexicon</label></div><div class="codex-sg"><button class="codex-btn codex-btn-danger" id="codex-clear-all">Clear all</button></div></div></div>');
     bindEvents();
 }
 
 function togglePanel() { $('#codex-panel').is(':visible') ? $('#codex-panel').fadeOut(150) : openPanel(); }
 function openPanel() { $('#codex-panel').fadeIn(150); currentDossier = null; gotoTab('cast'); }
-function gotoTab(name) { currentDossier = null; $('.codex-tab').removeClass('active'); $('.codex-tab[data-tab="' + name + '"]').addClass('active'); $('.codex-pane').hide(); $('#codex-pane-' + name).show(); if (name === 'cast') renderCast(); if (name === 'relationships') renderRels(); if (name === 'history') renderHistory(); if (name === 'settings') renderSettings(); }
+function gotoTab(name) { currentDossier = null; $('.codex-tab').removeClass('active'); $('.codex-tab[data-tab="' + name + '"]').addClass('active'); $('.codex-pane').hide(); $('#codex-pane-' + name).show(); if (name === 'cast') renderCast(); if (name === 'relationships') renderRels(); if (name === 'history') renderHistory(); if (name === 'settings') renderSettings(); if (name === 'import') populateCardPicker(); }
 function openDossier(id) { currentDossier = id; $('.codex-pane').hide(); $('#codex-pane-dossier').show(); renderDossier(id); }
 
 // ═══ RENDER: CAST ═══
@@ -581,7 +618,14 @@ function bindEvents() {
         await runUpdate({ force: true }); renderCast();
     });
     $('#codex-import-lexicon').on('click', async () => { const w = ($('#codex-import-world').val() || '').trim() || undefined; const n = await importFromLexicon(w); if (n > 0) renderCast(); });
-    $('#codex-import-cards').on('click', async () => { const w = ($('#codex-import-world').val() || '').trim() || undefined; const n = await importFromSTCards(w); if (n > 0) renderCast(); });
+    $('#codex-import-cards').on('click', async () => { const w = ($('#codex-import-world').val() || '').trim() || undefined; const n = await importFromSTCards(w); if (n > 0) { populateCardPicker(); renderCast(); } });
+    $('#codex-import-one-card').on('click', async () => {
+        const name = $('#codex-card-picker').val();
+        if (!name) { toastr.warning('Select a character first', 'Codex'); return; }
+        const w = ($('#codex-import-world').val() || '').trim() || undefined;
+        const n = await importSingleCard(name, w);
+        if (n > 0) { populateCardPicker(); renderCast(); }
+    });
     $('#codex-m-save').on('click', async () => {
         const name = $('#codex-m-name').val().trim(); if (!name) { toastr.warning('Name required'); return; }
         const s = getSettings(), ch = newGlobalCharacter(name, 'manual');
