@@ -101,3 +101,19 @@
     .codex-panel { width: 98vw; top: 35px; max-height: calc(100vh - 90px); border-radius: 10px; }
     .codex-tab { font-size: 10px; padding: 7px 3px; }
 }
+
+/* ── World Group Headers (v2) ────────────────────────────── */
+.codex-world-header {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    cursor: pointer; border-radius: 6px; margin-bottom: 4px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+    user-select: none; transition: background 0.15s;
+}
+.codex-world-header:hover { background: rgba(255,255,255,0.08); }
+.codex-world-header i { font-size: 10px; opacity: 0.5; width: 12px; text-align: center; }
+.codex-world-name { font-weight: 600; font-size: 13px; }
+.codex-world-count { margin-left: auto; font-size: 11px; opacity: 0.5; }
+.codex-world-group { margin-left: 4px; margin-bottom: 12px; border-left: 2px solid rgba(140, 160, 200, 0.15); padding-left: 8px; display: flex; flex-direction: column; gap: 6px; }
+
+/* Input field for import */
+.codex-input { width: 100%; padding: 6px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; color: inherit; font-size: 12px; font-family: inherit; box-sizing: border-box; margin-bottom: 6px; }
