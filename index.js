@@ -8,7 +8,7 @@
 import { getContext, extension_settings } from '../../../extensions.js';
 import { eventSource, event_types, saveSettingsDebounced, saveChatDebounced, chat_metadata, generateRaw, setExtensionPrompt } from '../../../../script.js';
 
-const EXT_ID = 'codex', EXT_NAME = 'The Codex', EXT_VERSION = '2.1.0', INJECT_KEY = 'codex_directives';
+const EXT_ID = 'codex', EXT_NAME = 'The Codex', EXT_VERSION = '2.1.1', INJECT_KEY = 'codex_directives';
 
 // ═══ DATA MODELS ═══
 
@@ -180,6 +180,60 @@ function applyProfile(charId, data) {
     saveGlobal(); saveChatData();
 }
 
+/** After profiling a world, extract cross-character relationships in one call */
+async function extractRelationships(worldName) {
+    const s = getSettings();
+    const worldChars = Object.values(s.characters).filter(c => c.world === worldName && c.core);
+    if (worldChars.length < 2) return;
+
+    toastr.info('Mapping relationships for ' + worldName + '...', 'Codex', { timeOut: 3000 });
+
+    const charSummaries = worldChars.map(c => {
+        const existing = Object.keys(c.baseRelationships || {}).join(', ');
+        return c.name + ': ' + (c.archetype || c.core.substring(0, 150)) + (existing ? ' (known ties: ' + existing + ')' : '');
+    }).join('\n');
+
+    const prompt = 'Given these characters from the same world, identify relationships between them based on their descriptions. Only include relationships that are implied or stated — do not invent connections.\n\nCHARACTERS:\n' + charSummaries + '\n\nReturn ONLY valid JSON — an array of relationships:\n[{"from":"Name1","to":"Name2","stance":"how Name1 feels about Name2","tension":0-10,"mutual":false}]\nSet mutual:true if the stance applies both ways. Return [] if no relationships are evident.';
+
+    try {
+        const r = await callAI(prompt, 600);
+        if (!r) return;
+        const cleaned = r.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+        const arr = parseJsonArray(cleaned) || JSON.parse(cleaned);
+        if (!Array.isArray(arr)) return;
+
+        let count = 0;
+        for (const rel of arr) {
+            if (!rel.from || !rel.to || !rel.stance) continue;
+            const fromChar = worldChars.find(c => c.name.toLowerCase() === rel.from.toLowerCase());
+            const toChar = worldChars.find(c => c.name.toLowerCase() === rel.to.toLowerCase());
+            if (!fromChar || !toChar) continue;
+
+            const tension = Math.max(0, Math.min(10, rel.tension || 5));
+            if (!fromChar.baseRelationships[rel.to]) {
+                fromChar.baseRelationships[rel.to] = { stance: rel.stance, tension };
+                count++;
+            }
+            if (rel.mutual && !toChar.baseRelationships[rel.from]) {
+                toChar.baseRelationships[rel.from] = { stance: rel.stance, tension };
+                count++;
+            }
+        }
+
+        if (count > 0) {
+            // Seed into per-chat state too
+            for (const ch of worldChars) {
+                const state = getChatStateFor(ch.id);
+                state.relationships = JSON.parse(JSON.stringify(ch.baseRelationships));
+            }
+            saveGlobal(); saveChatData();
+            toastr.success(count + ' relationships mapped in ' + worldName, 'Codex', { timeOut: 3000 });
+        }
+    } catch (e) {
+        console.warn('[Codex] Relationship extraction failed:', e);
+    }
+}
+
 // ═══ DETECTION ═══
 
 async function detectActive() {
@@ -280,6 +334,36 @@ async function importFromLexicon(worldName) {
             if (ch.source === 'lexicon' && ch.world === world && !getChatStateFor(ch.id).currentMood)
                 await profileAutopsy(ch.id);
         }
+        await extractRelationships(world);
+        saveGlobal(); saveChatData();
+    }
+    return count;
+}
+
+async function importFromSTCards(worldName) {
+    const ctx = getContext(), s = getSettings();
+    if (!ctx?.characters?.length) { toastr.info('No characters loaded', 'Codex'); return 0; }
+    const world = worldName || 'ST Cards';
+    if (!s.worlds.includes(world)) s.worlds.push(world);
+    let count = 0;
+    for (const card of ctx.characters) {
+        if (!card?.name) continue;
+        if (Object.values(s.characters).some(c => c.name === card.name)) continue;
+        const desc = (card.data?.description || card.description || '').substring(0, 2000);
+        const personality = (card.data?.personality || card.personality || '').substring(0, 1000);
+        const core = [desc, personality].filter(Boolean).join('\n\n');
+        if (!core.trim()) continue;
+        const ch = newGlobalCharacter(card.name, 'character_card');
+        ch.core = core; ch.world = world;
+        s.characters[ch.id] = ch; count++;
+    }
+    if (count > 0) {
+        saveGlobal(); toastr.success('Imported ' + count + ' cards -> ' + world, 'Codex', { timeOut: 3000 });
+        for (const ch of Object.values(s.characters)) {
+            if (ch.source === 'character_card' && ch.world === world && !getChatStateFor(ch.id).currentMood)
+                await profileAutopsy(ch.id);
+        }
+        await extractRelationships(world);
         saveGlobal(); saveChatData();
     }
     return count;
@@ -334,7 +418,7 @@ let currentDossier = null;
 
 function createPanel() {
     if ($('#codex-panel').length) return;
-    $('body').append('<div id="codex-panel" class="codex-panel" style="display:none;"><div class="codex-header"><span class="codex-title"><i class="fa-solid fa-users"></i> ' + EXT_NAME + ' <span class="codex-vtag">v2.1</span></span><div class="codex-header-btns"><button class="codex-icon-btn" id="codex-refresh" title="Update"><i class="fa-solid fa-arrows-rotate"></i></button><button class="codex-icon-btn" id="codex-close"><i class="fa-solid fa-xmark"></i></button></div></div><div class="codex-tabs"><button class="codex-tab active" data-tab="cast">Cast</button><button class="codex-tab" data-tab="relationships">Relations</button><button class="codex-tab" data-tab="history">History</button><button class="codex-tab" data-tab="import">Import</button><button class="codex-tab" data-tab="settings">Settings</button></div><div class="codex-pane" id="codex-pane-cast"><div id="codex-cast-list"></div></div><div class="codex-pane" id="codex-pane-dossier" style="display:none;"><div id="codex-dossier-content"></div></div><div class="codex-pane" id="codex-pane-relationships" style="display:none;"><div id="codex-rel-list"></div></div><div class="codex-pane" id="codex-pane-history" style="display:none;"><div class="codex-history-header"><span>Log</span><button class="codex-btn codex-btn-sm" id="codex-history-clear">Clear</button></div><div id="codex-history-list"></div></div><div class="codex-pane" id="codex-pane-import" style="display:none;"><div class="codex-import-section"><b>From Lexicon</b><input type="text" id="codex-import-world" class="codex-input" placeholder="World name"/><button class="codex-btn codex-btn-primary" id="codex-import-lexicon">Import</button></div><div class="codex-import-section"><b>Manual</b><input type="text" id="codex-m-name" class="codex-input" placeholder="Name"/><textarea id="codex-m-core" class="codex-input" rows="3" placeholder="Description"></textarea><input type="text" id="codex-m-world" class="codex-input" placeholder="World"/><button class="codex-btn codex-btn-primary" id="codex-m-save">Create</button></div></div><div class="codex-pane codex-settings-pane" id="codex-pane-settings" style="display:none;"><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-enabled"/> <b>Enable</b></label></div><div class="codex-sg"><b>Update:</b> <label class="codex-check"><input type="radio" name="codex-update" value="every_message"/> Every msg</label><label class="codex-check"><input type="radio" name="codex-update" value="on_mention"/> Mention</label><label class="codex-check"><input type="radio" name="codex-update" value="every_n"/> Every N</label><label class="codex-check"><input type="radio" name="codex-update" value="manual"/> Manual</label></div><div class="codex-sg"><b>Detection:</b> <label class="codex-check"><input type="radio" name="codex-detect" value="ai"/> AI</label><label class="codex-check"><input type="radio" name="codex-detect" value="keyword"/> KW</label><label class="codex-check"><input type="radio" name="codex-detect" value="manual"/> Manual</label></div><div class="codex-sg"><b>Max</b> <span id="codex-max-val">3</span><input type="range" id="codex-s-max" min="1" max="6" value="3"/></div><div class="codex-sg"><b>Depth</b> <span id="codex-depth-val">1</span><input type="range" id="codex-s-depth" min="0" max="6" value="1"/></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-rels"/> Relationships</label></div><div class="codex-sg"><b>Profile</b><select id="codex-s-profile"><option value="current">Current</option></select></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-lexicon"/> Lexicon</label></div><div class="codex-sg"><button class="codex-btn codex-btn-danger" id="codex-clear-all">Clear all</button></div></div></div>');
+    $('body').append('<div id="codex-panel" class="codex-panel" style="display:none;"><div class="codex-header"><span class="codex-title"><i class="fa-solid fa-users"></i> ' + EXT_NAME + ' <span class="codex-vtag">v2.1</span></span><div class="codex-header-btns"><button class="codex-icon-btn" id="codex-refresh" title="Update"><i class="fa-solid fa-arrows-rotate"></i></button><button class="codex-icon-btn" id="codex-close"><i class="fa-solid fa-xmark"></i></button></div></div><div class="codex-tabs"><button class="codex-tab active" data-tab="cast">Cast</button><button class="codex-tab" data-tab="relationships">Relations</button><button class="codex-tab" data-tab="history">History</button><button class="codex-tab" data-tab="import">Import</button><button class="codex-tab" data-tab="settings">Settings</button></div><div class="codex-pane" id="codex-pane-cast"><div id="codex-cast-list"></div></div><div class="codex-pane" id="codex-pane-dossier" style="display:none;"><div id="codex-dossier-content"></div></div><div class="codex-pane" id="codex-pane-relationships" style="display:none;"><div id="codex-rel-list"></div></div><div class="codex-pane" id="codex-pane-history" style="display:none;"><div class="codex-history-header"><span>Log</span><button class="codex-btn codex-btn-sm" id="codex-history-clear">Clear</button></div><div id="codex-history-list"></div></div><div class="codex-pane" id="codex-pane-import" style="display:none;"><div class="codex-import-section"><b>From Lexicon</b><input type="text" id="codex-import-world" class="codex-input" placeholder="World name"/><button class="codex-btn codex-btn-primary" id="codex-import-lexicon">Import from Lexicon</button></div><div class="codex-import-section"><b>From ST Character Cards</b><p style="font-size:11px;opacity:0.5;margin:2px 0 6px;">Import loaded character cards / group members.</p><button class="codex-btn codex-btn-primary" id="codex-import-cards">Import from Cards</button></div><div class="codex-import-section"><b>Manual</b><input type="text" id="codex-m-name" class="codex-input" placeholder="Name"/><textarea id="codex-m-core" class="codex-input" rows="3" placeholder="Description"></textarea><input type="text" id="codex-m-aliases" class="codex-input" placeholder="Aliases (comma separated)"/><input type="text" id="codex-m-world" class="codex-input" placeholder="World"/><button class="codex-btn codex-btn-primary" id="codex-m-save">Create</button></div></div><div class="codex-pane codex-settings-pane" id="codex-pane-settings" style="display:none;"><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-enabled"/> <b>Enable</b></label></div><div class="codex-sg"><b>Update:</b> <label class="codex-check"><input type="radio" name="codex-update" value="every_message"/> Every msg</label><label class="codex-check"><input type="radio" name="codex-update" value="on_mention"/> Mention</label><label class="codex-check"><input type="radio" name="codex-update" value="every_n"/> Every N</label><label class="codex-check"><input type="radio" name="codex-update" value="manual"/> Manual</label></div><div class="codex-sg"><b>Detection:</b> <label class="codex-check"><input type="radio" name="codex-detect" value="ai"/> AI</label><label class="codex-check"><input type="radio" name="codex-detect" value="keyword"/> KW</label><label class="codex-check"><input type="radio" name="codex-detect" value="manual"/> Manual</label></div><div class="codex-sg"><b>Max</b> <span id="codex-max-val">3</span><input type="range" id="codex-s-max" min="1" max="6" value="3"/></div><div class="codex-sg"><b>Depth</b> <span id="codex-depth-val">1</span><input type="range" id="codex-s-depth" min="0" max="6" value="1"/></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-rels"/> Relationships</label></div><div class="codex-sg"><b>Profile</b><select id="codex-s-profile"><option value="current">Current</option></select></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-lexicon"/> Lexicon</label></div><div class="codex-sg"><button class="codex-btn codex-btn-danger" id="codex-clear-all">Clear all</button></div></div></div>');
     bindEvents();
 }
 
@@ -354,7 +438,7 @@ function renderCast() {
     for (const [world, chars] of Object.entries(groups)) {
         const col = (s.collapsedWorlds || []).includes(world);
         const ac = chars.filter(c => chat.activeCharacters.includes(c.id)).length;
-        html += '<div class="codex-world-header" data-world="' + xss(world) + '"><i class="fa-solid fa-chevron-' + (col ? 'right' : 'down') + '"></i><span class="codex-world-name">' + xss(world) + '</span><span class="codex-world-count">' + chars.length + (ac ? ' \u00b7 ' + ac + ' active' : '') + '</span></div>';
+        html += '<div class="codex-world-header" data-world="' + xss(world) + '"><i class="fa-solid fa-chevron-' + (col ? 'right' : 'down') + '"></i><span class="codex-world-name">' + xss(world) + '</span><span class="codex-world-count">' + chars.length + (ac ? ' \u00b7 ' + ac + ' active' : '') + '</span><button class="codex-icon-btn codex-world-rename" data-world="' + xss(world) + '" title="Rename group"><i class="fa-solid fa-pen-to-square"></i></button></div>';
         if (!col) {
             html += '<div class="codex-world-group">';
             for (const g of chars) {
@@ -389,7 +473,8 @@ function renderDossier(charId) {
     }
 
     let relsHtml = '<div class="codex-empty">None.</div>';
-    if (Object.keys(state.relationships || {}).length) {
+    const relCount = Object.keys(state.relationships || {}).length;
+    if (relCount) {
         relsHtml = Object.entries(state.relationships).map(function(entry) {
             var n = entry[0], r = entry[1];
             const pct = (r.tension / 10) * 100, col = r.tension > 7 ? '#c45c5c' : r.tension > 4 ? '#b8a460' : '#7a9e7e';
@@ -398,7 +483,64 @@ function renderDossier(charId) {
         }).join('');
     }
 
-    $('#codex-dossier-content').html('<div class="codex-dossier"><div class="codex-dossier-back" id="codex-dossier-back"><i class="fa-solid fa-arrow-left"></i> Back</div><div class="codex-dossier-name">' + xss(g.name) + ' ' + (isA ? '<span class="codex-badge codex-badge-active">\u25CF in scene</span>' : '') + '</div><div class="codex-dossier-meta">' + xss(g.world) + ' \u00b7 ' + g.source + ' \u00b7 ' + ((g.aliases || []).join(', ') || 'no aliases') + '</div><div class="codex-dossier-section"><div class="codex-dossier-label">ARCHETYPE</div><div class="codex-dossier-value">' + xss(g.archetype || 'Not set') + '</div></div><div class="codex-dossier-section"><div class="codex-dossier-label">EMOTIONAL CORE</div><div class="codex-dossier-value codex-val-hiding">' + xss(g.emotionalCore || 'Not set') + '</div></div><div class="codex-dossier-section"><div class="codex-dossier-label">CORE TRAITS</div><div>' + ((g.coreTraits || []).map(t => '<span class="codex-trait codex-trait-active">' + xss(t) + '</span>').join('') || 'none') + '</div></div>' + (habits ? '<div class="codex-dossier-section"><div class="codex-dossier-label">HABITS</div><div class="codex-pills">' + habits + '</div></div>' : '') + (manners ? '<div class="codex-dossier-section"><div class="codex-dossier-label">MANNERISMS</div><div class="codex-pills">' + manners + '</div></div>' : '') + '<div class="codex-dossier-divider"></div><div class="codex-dossier-section-title">CURRENT STATE</div><div class="codex-dossier-section"><div class="codex-dossier-label">MOOD</div><div class="codex-dossier-value"><b>' + xss(state.currentMood || '?') + '</b></div></div>' + (traj ? '<div class="codex-dossier-section"><div class="codex-dossier-label">TRAJECTORY</div><div class="codex-dossier-value codex-trajectory">' + xss(traj) + '</div></div>' : '') + '<div class="codex-dossier-section"><div class="codex-dossier-label">GOAL</div><div>' + xss(state.activeGoal || 'none') + '</div></div><div class="codex-dossier-section"><div class="codex-dossier-label">STANCE</div><div>' + xss(state.stance || 'neutral') + '</div></div><div class="codex-dossier-section"><div class="codex-dossier-label">HIDING</div><div class="codex-val-hiding">' + xss(state.hiding || 'nothing') + '</div></div>' + (traits || dormant ? '<div class="codex-dossier-section"><div class="codex-dossier-label">TRAITS</div><div>' + traits + ' ' + dormant + '</div></div>' : '') + (state.directive ? '<div class="codex-dossier-section"><div class="codex-dossier-label">DIRECTIVE</div><div class="codex-char-directive">' + xss(state.directive) + '</div></div>' : '') + '<div class="codex-dossier-divider"></div><div class="codex-dossier-section-title">SECRETS</div>' + secretsHtml + '<div class="codex-dossier-divider"></div><div class="codex-dossier-section-title">RELATIONSHIPS</div>' + relsHtml + '<div class="codex-dossier-divider"></div><div class="codex-dossier-actions"><button class="codex-btn codex-btn-primary codex-dossier-autopsy" data-id="' + xss(charId) + '"><i class="fa-solid fa-microscope"></i> Autopsy</button><button class="codex-btn codex-btn-primary codex-dossier-collab" data-id="' + xss(charId) + '"><i class="fa-solid fa-handshake"></i> Collab</button><button class="codex-btn codex-dossier-edit" data-id="' + xss(charId) + '"><i class="fa-solid fa-pen"></i> Edit</button><button class="codex-btn codex-btn-danger codex-char-delete" data-id="' + xss(charId) + '"><i class="fa-solid fa-trash"></i> Delete</button></div><div class="codex-collab-form" data-id="' + xss(charId) + '" style="display:none;"><textarea class="codex-input" id="codex-collab-hints" rows="4" placeholder="Your notes about this character..."></textarea><button class="codex-btn codex-btn-primary codex-collab-go" data-id="' + xss(charId) + '">Generate</button></div><div class="codex-edit-form" data-id="' + xss(charId) + '" style="display:none;"><label class="codex-edit-label">World</label><input class="codex-input codex-ef-world" value="' + xss(g.world || '') + '"/><label class="codex-edit-label">Aliases</label><input class="codex-input codex-ef-aliases" value="' + xss((g.aliases || []).join(', ')) + '"/><label class="codex-edit-label">Archetype</label><input class="codex-input codex-ef-archetype" value="' + xss(g.archetype || '') + '"/><label class="codex-edit-label">Emotional Core</label><input class="codex-input codex-ef-ecore" value="' + xss(g.emotionalCore || '') + '"/><label class="codex-edit-label">Core Traits</label><input class="codex-input codex-ef-ctraits" value="' + xss((g.coreTraits || []).join(', ')) + '"/><label class="codex-edit-label">Growth</label><select class="codex-input codex-ef-growth"><option value="locked"' + (g.growthPermission === 'locked' ? ' selected' : '') + '>Locked</option><option value="drift"' + (g.growthPermission === 'drift' ? ' selected' : '') + '>Drift</option><option value="transform"' + (g.growthPermission === 'transform' ? ' selected' : '') + '>Transform</option></select><button class="codex-btn codex-btn-primary codex-edit-save" data-id="' + xss(charId) + '">Save</button></div></div>');
+    const secCount = (g.secrets || []).length;
+
+    const h = '<div class="codex-dossier">'
+        + '<div class="codex-dossier-back" id="codex-dossier-back"><i class="fa-solid fa-arrow-left"></i> Back</div>'
+        + '<div class="codex-dossier-name">' + xss(g.name) + ' ' + (isA ? '<span class="codex-badge codex-badge-active">\u25CF in scene</span>' : '') + '</div>'
+        + '<div class="codex-dossier-meta">' + xss(g.world) + ' \u00b7 ' + g.source + ' \u00b7 ' + ((g.aliases || []).join(', ') || 'no aliases') + '</div>'
+
+        // ── Identity (collapsible)
+        + '<div class="codex-collapsible">'
+        + '<div class="codex-collapsible-header" data-section="identity"><i class="fa-solid fa-chevron-down"></i> IDENTITY</div>'
+        + '<div class="codex-collapsible-body">'
+        + '<div class="codex-dossier-section"><div class="codex-dossier-label">ARCHETYPE</div><div class="codex-dossier-value">' + xss(g.archetype || 'Not set') + '</div></div>'
+        + '<div class="codex-dossier-section"><div class="codex-dossier-label">EMOTIONAL CORE</div><div class="codex-dossier-value codex-val-hiding">' + xss(g.emotionalCore || 'Not set') + '</div></div>'
+        + '<div class="codex-dossier-section"><div class="codex-dossier-label">CORE TRAITS</div><div>' + ((g.coreTraits || []).map(t => '<span class="codex-trait codex-trait-active">' + xss(t) + '</span>').join('') || 'none') + '</div></div>'
+        + (habits ? '<div class="codex-dossier-section"><div class="codex-dossier-label">HABITS</div><div class="codex-pills">' + habits + '</div></div>' : '')
+        + (manners ? '<div class="codex-dossier-section"><div class="codex-dossier-label">MANNERISMS</div><div class="codex-pills">' + manners + '</div></div>' : '')
+        + '</div></div>'
+
+        // ── Current State (collapsible, open by default)
+        + '<div class="codex-collapsible">'
+        + '<div class="codex-collapsible-header codex-section-open" data-section="state"><i class="fa-solid fa-chevron-down"></i> CURRENT STATE</div>'
+        + '<div class="codex-collapsible-body">'
+        + '<div class="codex-dossier-section"><div class="codex-dossier-label">MOOD</div><div class="codex-dossier-value"><b>' + xss(state.currentMood || '?') + '</b></div></div>'
+        + (traj ? '<div class="codex-dossier-section"><div class="codex-dossier-label">TRAJECTORY</div><div class="codex-dossier-value codex-trajectory">' + xss(traj) + '</div></div>' : '')
+        + '<div class="codex-dossier-section"><div class="codex-dossier-label">GOAL</div><div>' + xss(state.activeGoal || 'none') + '</div></div>'
+        + '<div class="codex-dossier-section"><div class="codex-dossier-label">STANCE</div><div>' + xss(state.stance || 'neutral') + '</div></div>'
+        + '<div class="codex-dossier-section"><div class="codex-dossier-label">HIDING</div><div class="codex-val-hiding">' + xss(state.hiding || 'nothing') + '</div></div>'
+        + (traits || dormant ? '<div class="codex-dossier-section"><div class="codex-dossier-label">TRAITS</div><div>' + traits + ' ' + dormant + '</div></div>' : '')
+        + (state.directive ? '<div class="codex-dossier-section"><div class="codex-dossier-label">DIRECTIVE</div><div class="codex-char-directive">' + xss(state.directive) + '</div></div>' : '')
+        + '</div></div>'
+
+        // ── Secrets (collapsible)
+        + '<div class="codex-collapsible">'
+        + '<div class="codex-collapsible-header" data-section="secrets"><i class="fa-solid fa-chevron-right"></i> SECRETS <span class="codex-section-count">' + secCount + '</span></div>'
+        + '<div class="codex-collapsible-body" style="display:none;">'
+        + secretsHtml
+        + '</div></div>'
+
+        // ── Relationships (collapsible)
+        + '<div class="codex-collapsible">'
+        + '<div class="codex-collapsible-header" data-section="rels"><i class="fa-solid fa-chevron-right"></i> RELATIONSHIPS <span class="codex-section-count">' + relCount + '</span></div>'
+        + '<div class="codex-collapsible-body" style="display:none;">'
+        + relsHtml
+        + '</div></div>'
+
+        // ── Actions (always visible)
+        + '<div class="codex-dossier-divider"></div>'
+        + '<div class="codex-dossier-actions">'
+        + '<button class="codex-btn codex-btn-primary codex-dossier-autopsy" data-id="' + xss(charId) + '"><i class="fa-solid fa-microscope"></i> Autopsy</button>'
+        + '<button class="codex-btn codex-btn-primary codex-dossier-collab" data-id="' + xss(charId) + '"><i class="fa-solid fa-handshake"></i> Collab</button>'
+        + '<button class="codex-btn codex-dossier-edit" data-id="' + xss(charId) + '"><i class="fa-solid fa-pen"></i> Edit</button>'
+        + '<button class="codex-btn codex-btn-danger codex-char-delete" data-id="' + xss(charId) + '"><i class="fa-solid fa-trash"></i> Delete</button>'
+        + '</div>'
+        + '<div class="codex-collab-form" data-id="' + xss(charId) + '" style="display:none;"><textarea class="codex-input" id="codex-collab-hints" rows="4" placeholder="Your notes about this character..."></textarea><button class="codex-btn codex-btn-primary codex-collab-go" data-id="' + xss(charId) + '">Generate</button></div>'
+        + '<div class="codex-edit-form" data-id="' + xss(charId) + '" style="display:none;"><label class="codex-edit-label">World</label><input class="codex-input codex-ef-world" value="' + xss(g.world || '') + '"/><label class="codex-edit-label">Aliases</label><input class="codex-input codex-ef-aliases" value="' + xss((g.aliases || []).join(', ')) + '"/><label class="codex-edit-label">Archetype</label><input class="codex-input codex-ef-archetype" value="' + xss(g.archetype || '') + '"/><label class="codex-edit-label">Emotional Core</label><input class="codex-input codex-ef-ecore" value="' + xss(g.emotionalCore || '') + '"/><label class="codex-edit-label">Core Traits</label><input class="codex-input codex-ef-ctraits" value="' + xss((g.coreTraits || []).join(', ')) + '"/><label class="codex-edit-label">Growth</label><select class="codex-input codex-ef-growth"><option value="locked"' + (g.growthPermission === 'locked' ? ' selected' : '') + '>Locked</option><option value="drift"' + (g.growthPermission === 'drift' ? ' selected' : '') + '>Drift</option><option value="transform"' + (g.growthPermission === 'transform' ? ' selected' : '') + '>Transform</option></select><button class="codex-btn codex-btn-primary codex-edit-save" data-id="' + xss(charId) + '">Save</button></div>'
+        + '</div>';
+
+    $('#codex-dossier-content').html(h);
 }
 
 // ═══ RENDER: RELS, HISTORY, SETTINGS ═══
@@ -439,14 +581,16 @@ function bindEvents() {
         await runUpdate({ force: true }); renderCast();
     });
     $('#codex-import-lexicon').on('click', async () => { const w = ($('#codex-import-world').val() || '').trim() || undefined; const n = await importFromLexicon(w); if (n > 0) renderCast(); });
+    $('#codex-import-cards').on('click', async () => { const w = ($('#codex-import-world').val() || '').trim() || undefined; const n = await importFromSTCards(w); if (n > 0) renderCast(); });
     $('#codex-m-save').on('click', async () => {
         const name = $('#codex-m-name').val().trim(); if (!name) { toastr.warning('Name required'); return; }
         const s = getSettings(), ch = newGlobalCharacter(name, 'manual');
         ch.core = $('#codex-m-core').val().trim(); ch.world = $('#codex-m-world').val().trim() || 'Uncategorized';
+        ch.aliases = ($('#codex-m-aliases').val() || '').split(',').map(a => a.trim()).filter(Boolean);
         if (!s.worlds.includes(ch.world)) s.worlds.push(ch.world);
         s.characters[ch.id] = ch; saveGlobal();
         if (ch.core) await profileAutopsy(ch.id);
-        saveGlobal(); saveChatData(); $('#codex-m-name,#codex-m-core,#codex-m-world').val(''); gotoTab('cast');
+        saveGlobal(); saveChatData(); $('#codex-m-name,#codex-m-core,#codex-m-world,#codex-m-aliases').val(''); gotoTab('cast');
     });
     // Settings
     $('#codex-s-enabled').on('change', function () { getSettings().enabled = this.checked; saveGlobal(); });
@@ -462,9 +606,26 @@ function bindEvents() {
     // Cast
     $(document).on('click', '.codex-cast-card', function (e) { if ($(e.target).closest('.codex-icon-btn').length) return; openDossier($(this).data('id')); });
     $(document).on('click', '.codex-char-toggle', function (e) { e.stopPropagation(); const id = $(this).data('id'), c = getChat(); if (!Array.isArray(c.manuallyPinned)) c.manuallyPinned = []; if (c.activeCharacters.includes(id)) { c.activeCharacters = c.activeCharacters.filter(i => i !== id); c.manuallyPinned = c.manuallyPinned.filter(i => i !== id); } else { c.activeCharacters.push(id); if (!c.manuallyPinned.includes(id)) c.manuallyPinned.push(id); } saveChatData(); renderCast(); });
-    $(document).on('click', '.codex-world-header', function () { const w = $(this).data('world'), s = getSettings(); if (s.collapsedWorlds.includes(w)) s.collapsedWorlds = s.collapsedWorlds.filter(x => x !== w); else s.collapsedWorlds.push(w); saveGlobal(); renderCast(); });
+    $(document).on('click', '.codex-world-header', function (e) { if ($(e.target).closest('.codex-world-rename').length) return; const w = $(this).data('world'), s = getSettings(); if (s.collapsedWorlds.includes(w)) s.collapsedWorlds = s.collapsedWorlds.filter(x => x !== w); else s.collapsedWorlds.push(w); saveGlobal(); renderCast(); });
+    $(document).on('click', '.codex-world-rename', function (e) {
+        e.stopPropagation();
+        const oldWorld = $(this).data('world');
+        const newWorld = prompt('Rename "' + oldWorld + '" to:', oldWorld);
+        if (!newWorld || newWorld.trim() === '' || newWorld.trim() === oldWorld) return;
+        const name = newWorld.trim(), s = getSettings();
+        for (const ch of Object.values(s.characters)) { if (ch.world === oldWorld) ch.world = name; }
+        s.worlds = s.worlds.map(w => w === oldWorld ? name : w);
+        if (s.collapsedWorlds.includes(oldWorld)) s.collapsedWorlds = s.collapsedWorlds.map(w => w === oldWorld ? name : w);
+        saveGlobal(); toastr.success('Renamed to ' + name, 'Codex'); renderCast();
+    });
     // Dossier
     $(document).on('click', '#codex-dossier-back', () => gotoTab('cast'));
+    $(document).on('click', '.codex-collapsible-header', function () {
+        const body = $(this).next('.codex-collapsible-body');
+        const icon = $(this).find('i');
+        body.slideToggle(150);
+        icon.toggleClass('fa-chevron-down fa-chevron-right');
+    });
     $(document).on('click', '.codex-dossier-autopsy', async function () { await profileAutopsy($(this).data('id')); renderDossier($(this).data('id')); });
     $(document).on('click', '.codex-dossier-collab', function () { $('.codex-collab-form[data-id="' + $(this).data('id') + '"]').slideToggle(150); });
     $(document).on('click', '.codex-collab-go', async function () { const id = $(this).data('id'), hints = $('#codex-collab-hints').val().trim(); if (!hints) { toastr.warning('Write hints first'); return; } await profileCollab(id, hints); renderDossier(id); });
