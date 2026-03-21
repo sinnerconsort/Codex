@@ -1,5 +1,5 @@
 /**
- * The Codex v2.1 — Character State Engine
+ * The Codex v3 — Character State Engine
  * Layer 1: Identity foundation (archetype, core traits, habits, mannerisms)
  * Layer 2: Tiered secrets (surface/core/buried) with behavioral tells
  * Full-page character dossier UI. Three population modes: autopsy/collab/manual.
@@ -8,7 +8,9 @@
 import { getContext, extension_settings } from '../../../extensions.js';
 import { eventSource, event_types, saveSettingsDebounced, saveChatDebounced, chat_metadata, generateRaw, setExtensionPrompt } from '../../../../script.js';
 
-const EXT_ID = 'codex', EXT_NAME = 'The Codex', EXT_VERSION = '2.1.1', INJECT_KEY = 'codex_directives';
+const EXT_ID = 'codex', EXT_NAME = 'The Codex', EXT_VERSION = '3.0.0', INJECT_KEY = 'codex_directives';
+
+const JOURNAL_FORMATS = ['diary', 'journal', 'scrapbook', 'captains_log', 'ledger', 'field_notes', 'letters_unsent', 'photographs'];
 
 // ═══ DATA MODELS ═══
 
@@ -20,6 +22,11 @@ function newGlobalCharacter(name, source = 'manual') {
         archetype: '', emotionalCore: '', coreTraits: [],
         habits: [], mannerisms: [], growthPermission: 'drift',
         secrets: [], baseRelationships: {}, createdAt: Date.now(),
+        // v3: Voice
+        voiceProfile: { register: '', vocabulary: '', sentencePattern: '', avoids: '', sampleCadence: '' },
+        // v3: Journal
+        journalFormat: '',   // diary|journal|scrapbook|captains_log|ledger|field_notes|letters_unsent|photographs
+        journalStyle: '',    // prose instruction for how they write
     };
 }
 
@@ -30,6 +37,8 @@ function newChatState() {
         relationships: {}, emotionalTrajectory: [], trustLevels: {},
         coreDrift: 0, secretWillingness: {}, secretsAtRisk: 0,
         lastUpdated: 0, updateCount: 0, scenesSinceUpdate: 0,
+        // v3: Journal entries
+        journal: [],  // [{content, timestamp, messageIndex, significance, tags, pivotal}]
     };
 }
 
@@ -39,7 +48,8 @@ const DEFAULT_SETTINGS = {
     enableOffscreen: false, offscreenFrequency: 5, injectionDepth: 1,
     injectRelationships: true, maxDirectiveLength: 500,
     useLexicon: true, trackSecretsAtRisk: true,
-    characters: {}, worlds: [], collapsedWorlds: [], settingsVersion: 3,
+    journalInjectionCount: 2,  // how many journal entries to inject per turn
+    characters: {}, worlds: [], collapsedWorlds: [], settingsVersion: 4,
 };
 
 const DEFAULT_CHAT = {
@@ -87,15 +97,19 @@ function getActiveChars() { return (getChat().activeCharacters || []).map(id => 
 function addHistory(name, field, oldV, newV) { const c = getChat(); c.characterHistory.push({ timestamp: Date.now(), characterName: name, field, oldValue: String(oldV || '').substring(0, 80), newValue: String(newV || '').substring(0, 80) }); if (c.characterHistory.length > 300) c.characterHistory = c.characterHistory.slice(-300); }
 
 function migrateData() {
-    const s = getSettings(); if (s.settingsVersion >= 3) return;
+    const s = getSettings(); if (s.settingsVersion >= 4) return;
     for (const ch of Object.values(s.characters)) {
         if (!ch.archetype) ch.archetype = ''; if (!ch.emotionalCore) ch.emotionalCore = '';
         if (!Array.isArray(ch.coreTraits)) ch.coreTraits = []; if (!Array.isArray(ch.habits)) ch.habits = [];
         if (!Array.isArray(ch.mannerisms)) ch.mannerisms = []; if (!Array.isArray(ch.secrets)) ch.secrets = [];
         if (!ch.growthPermission) ch.growthPermission = 'drift'; if (!ch.world) ch.world = 'Uncategorized';
+        // v3 fields
+        if (!ch.voiceProfile) ch.voiceProfile = { register: '', vocabulary: '', sentencePattern: '', avoids: '', sampleCadence: '' };
+        if (!ch.journalFormat) ch.journalFormat = '';
+        if (!ch.journalStyle) ch.journalStyle = '';
         for (const f of ['currentMood','activeGoal','stance','hiding','fear','recentMemory','directive','activeTraits','dormantTraits','relationships','secretsAtRisk','active','detectedVia','lastActiveMessage','lastUpdated','updateCount','scenesSinceUpdate']) delete ch[f];
     }
-    s.settingsVersion = 3;
+    s.settingsVersion = 4;
 }
 
 function saveGlobal() { saveSettingsDebounced(); }
@@ -128,9 +142,13 @@ function getRecentCtx(n = 3) { const ctx = getContext(); if (!ctx?.chat?.length)
 async function profileAutopsy(charId) {
     const g = getSettings().characters[charId]; if (!g?.core) return;
     toastr.info('Deep-reading ' + g.name + '...', 'Codex', { timeOut: 3000 });
-    const prompt = 'Analyze this character for a roleplay engine. Extract psychology, behavior, secrets.\n\nCHARACTER: ' + g.name + '\nSOURCE:\n' + g.core.substring(0, 3500) + '\n\nReturn ONLY valid JSON:\n{"archetype":"behavioral description not a label","emotionalCore":"deepest vulnerability","coreTraits":["4-5 traits"],"habits":["3-4 things they DO"],"mannerisms":["3-4 speech/body tells"],"aliases":["nicknames"],"secrets":[{"content":"...","tier":"surface|core|buried","behavioralTell":"...","ifRevealed":"..."}],"currentMood":"default state","activeGoal":"...","stance":"...","hiding":"...","fear":"...","activeTraits":["3-4"],"dormantTraits":["3-4"],"directive":"2-3 sentences: behavior, body language, speech","baseRelationships":{"Name":{"stance":"...","tension":0-10}}}';
+    // Adaptive budgets based on source text length
+    const coreLen = g.core.length;
+    const inputCap = coreLen > 10000 ? 8000 : coreLen > 5000 ? 5000 : 3500;
+    const outputTokens = coreLen > 10000 ? 2500 : coreLen > 5000 ? 2000 : 1500;
+    const prompt = 'Analyze this character deeply for a roleplay engine. Extract psychology, behavior, secrets, and their unique VOICE.\n\nCHARACTER: ' + g.name + '\nSOURCE:\n' + g.core.substring(0, inputCap) + '\n\nReturn ONLY valid JSON:\n{"archetype":"behavioral description not a label","emotionalCore":"deepest vulnerability","coreTraits":["4-5 traits"],"habits":["3-4 things they DO"],"mannerisms":["3-4 speech/body tells"],"aliases":["nicknames"],"secrets":[{"content":"...","tier":"surface|core|buried","behavioralTell":"...","ifRevealed":"..."}],"currentMood":"default state","activeGoal":"...","stance":"...","hiding":"...","fear":"...","activeTraits":["3-4"],"dormantTraits":["3-4"],"directive":"2-3 sentences: behavior, body language, speech","voiceProfile":{"register":"tone/energy","vocabulary":"word choices, metaphor domains","sentencePattern":"how they structure speech","avoids":"what they never say","sampleCadence":"1-2 example sentences in their voice"},"journalFormat":"diary|journal|scrapbook|captains_log|ledger|field_notes|letters_unsent|photographs","journalStyle":"how they write privately","voiceProfile":{"register":"tone/energy","vocabulary":"word choices, metaphor domains","sentencePattern":"how they structure speech","avoids":"what they never say","sampleCadence":"1-2 example sentences in their voice"},"journalFormat":"diary|journal|scrapbook|captains_log|ledger|field_notes|letters_unsent|photographs","journalStyle":"how they write privately","baseRelationships":{"Name":{"stance":"...","tension":0-10}}}';
     try {
-        const r = await callAI(prompt, 1500);
+        const r = await callAI(prompt, outputTokens);
         if (!r) { toastr.error('No response for ' + g.name, 'Codex'); return; }
         const data = parseJson(r);
         if (!data) { toastr.warning('Parse failed: ' + r.substring(0, 60), 'Codex', { timeOut: 5000 }); return; }
@@ -142,9 +160,12 @@ async function profileAutopsy(charId) {
 async function profileCollab(charId, hints) {
     const g = getSettings().characters[charId]; if (!g?.core) return;
     toastr.info('Collaborating on ' + g.name + '...', 'Codex', { timeOut: 3000 });
-    const prompt = 'Build a deep profile using source text AND user guidance.\n\nCHARACTER: ' + g.name + '\nSOURCE:\n' + g.core.substring(0, 3000) + '\n\nUSER NOTES:\n' + hints + '\n\nReturn ONLY valid JSON:\n{"archetype":"...","emotionalCore":"...","coreTraits":["4-5"],"habits":["3-4"],"mannerisms":["3-4"],"aliases":["..."],"secrets":[{"content":"...","tier":"surface|core|buried","behavioralTell":"...","ifRevealed":"..."}],"currentMood":"...","activeGoal":"...","stance":"...","hiding":"...","fear":"...","activeTraits":["3-4"],"dormantTraits":["3-4"],"directive":"2-3 sentences","baseRelationships":{"Name":{"stance":"...","tension":0-10}}}';
+    const coreLen = g.core.length;
+    const inputCap = coreLen > 10000 ? 6000 : coreLen > 5000 ? 4000 : 3000;
+    const outputTokens = coreLen > 10000 ? 2500 : coreLen > 5000 ? 2000 : 1500;
+    const prompt = 'Build a deep profile using source text AND user guidance.\n\nCHARACTER: ' + g.name + '\nSOURCE:\n' + g.core.substring(0, inputCap) + '\n\nUSER NOTES:\n' + hints + '\n\nReturn ONLY valid JSON:\n{"archetype":"...","emotionalCore":"...","coreTraits":["4-5"],"habits":["3-4"],"mannerisms":["3-4"],"aliases":["..."],"secrets":[{"content":"...","tier":"surface|core|buried","behavioralTell":"...","ifRevealed":"..."}],"currentMood":"...","activeGoal":"...","stance":"...","hiding":"...","fear":"...","activeTraits":["3-4"],"dormantTraits":["3-4"],"directive":"2-3 sentences","baseRelationships":{"Name":{"stance":"...","tension":0-10}}}';
     try {
-        const r = await callAI(prompt, 1500);
+        const r = await callAI(prompt, outputTokens);
         if (!r) { toastr.error('No response', 'Codex'); return; }
         const data = parseJson(r);
         if (!data) { toastr.warning('Parse failed', 'Codex', { timeOut: 5000 }); return; }
@@ -161,6 +182,17 @@ function applyProfile(charId, data) {
     if (Array.isArray(data.habits)) g.habits = data.habits;
     if (Array.isArray(data.mannerisms)) g.mannerisms = data.mannerisms;
     if (Array.isArray(data.aliases) && data.aliases.length) g.aliases = data.aliases;
+    // v3: Voice profile
+    if (data.voiceProfile && typeof data.voiceProfile === 'object') {
+        if (!g.voiceProfile) g.voiceProfile = {};
+        for (const k of ['register', 'vocabulary', 'sentencePattern', 'avoids', 'sampleCadence']) {
+            if (data.voiceProfile[k]) g.voiceProfile[k] = data.voiceProfile[k];
+        }
+    }
+    // v3: Journal format + style
+    if (data.journalFormat && JOURNAL_FORMATS.includes(data.journalFormat)) g.journalFormat = data.journalFormat;
+    else if (data.journalFormat && typeof data.journalFormat === 'string') g.journalFormat = data.journalFormat.toLowerCase().replace(/[^a-z_]/g, '_');
+    if (data.journalStyle) g.journalStyle = data.journalStyle;
     if (Array.isArray(data.secrets)) {
         g.secrets = data.secrets.map(s => ({
             content: s.content || '', tier: ['surface', 'core', 'buried'].includes(s.tier) ? s.tier : 'surface',
@@ -196,7 +228,7 @@ async function extractRelationships(worldName) {
     const prompt = 'Given these characters from the same world, identify relationships between them based on their descriptions. Only include relationships that are implied or stated — do not invent connections.\n\nCHARACTERS:\n' + charSummaries + '\n\nReturn ONLY valid JSON — an array of relationships:\n[{"from":"Name1","to":"Name2","stance":"how Name1 feels about Name2","tension":0-10,"mutual":false}]\nSet mutual:true if the stance applies both ways. Return [] if no relationships are evident.';
 
     try {
-        const r = await callAI(prompt, 600);
+        const r = await callAI(prompt, 1500);
         if (!r) return;
         const cleaned = r.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
         const arr = parseJsonArray(cleaned) || JSON.parse(cleaned);
@@ -263,6 +295,8 @@ async function runUpdate(opts = {}) {
         const toUp = merged.slice(0, s.maxSimultaneousUpdates);
         if (opts.force) toastr.info('Updating ' + toUp.length + '...', 'Codex', { timeOut: 2000 });
         for (const id of toUp) { if (!s.characters[id]?.core) continue; await updateState(id, opts.force); }
+        // v3: Decay journal significance for all active characters
+        for (const id of merged) decayJournalEntries(id);
         injectDirectives(); c.lastUpdateAt = ctx?.chat?.length || 0; c.lastUpdateTime = Date.now();
         saveGlobal(); saveChatData(); document.dispatchEvent(new CustomEvent('codex:updated'));
     } catch (e) { console.error('[Codex]', e); } finally { isUpdating = false; }
@@ -276,9 +310,9 @@ async function updateState(charId, verbose = false) {
     let secPrompt = '';
     if (g.secrets?.length) secPrompt = '\n\nSECRETS:\n' + g.secrets.map((sec, i) => { const w = state.secretWillingness?.[i] ?? sec.willingness ?? 3; return '  [' + sec.tier.toUpperCase() + '] ' + sec.content + ' (will: ' + w + '/10, tell: ' + (sec.behavioralTell || 'none') + ')'; }).join('\n');
     let relCtx = ''; if (Object.keys(state.relationships).length > 0) relCtx = '\n\nRELATIONSHIPS:\n' + Object.entries(state.relationships).map(([n, r]) => '  ' + n + ': ' + r.stance + ' (tension ' + r.tension + '/10)').join('\n');
-    const prompt = 'Update character psychology.\n\nCHARACTER: ' + g.name + '\nARCHETYPE: ' + (g.archetype || 'n/a') + '\nCORE: ' + (g.emotionalCore || 'n/a') + '\nANCHOR TRAITS: ' + ((g.coreTraits || []).join(', ') || 'n/a') + '\n\nSTATE:\n  Mood: ' + (state.currentMood || '?') + ' | Goal: ' + (state.activeGoal || '?') + '\n  Stance: ' + (state.stance || '?') + ' | Hiding: ' + (state.hiding || '?') + '\n  Trajectory: ' + ((state.emotionalTrajectory || []).slice(-5).join(' > ') || 'none') + relCtx + secPrompt + secretCtx + '\n\nWHAT HAPPENED:\n' + getRecentCtx(3) + '\n\nReturn ONLY JSON:\n{"currentMood":"1-4 words","activeGoal":"...","stance":"...","hiding":"...","fear":"...","recentMemory":"one sentence","activeTraits":["2-4"],"dormantTraits":["2-4"],"directive":"2-3 sentences: behavior, tells, habits","relationshipUpdates":{"Name":{"stance":"...","tension":0-10}},"trustUpdates":{"Name":0-10},"secretWillingnessUpdates":{"0":0-10}}';
+    const prompt = 'Update character psychology.\n\nCHARACTER: ' + g.name + '\nARCHETYPE: ' + (g.archetype || 'n/a') + '\nCORE: ' + (g.emotionalCore || 'n/a') + '\nANCHOR TRAITS: ' + ((g.coreTraits || []).join(', ') || 'n/a') + '\n\nSTATE:\n  Mood: ' + (state.currentMood || '?') + ' | Goal: ' + (state.activeGoal || '?') + '\n  Stance: ' + (state.stance || '?') + ' | Hiding: ' + (state.hiding || '?') + '\n  Trajectory: ' + ((state.emotionalTrajectory || []).slice(-5).join(' > ') || 'none') + relCtx + secPrompt + secretCtx + '\n\nWHAT HAPPENED:\n' + getRecentCtx(3) + '\n\nReturn ONLY JSON:\n{"currentMood":"1-4 words","activeGoal":"...","stance":"...","hiding":"...","fear":"...","recentMemory":"one sentence","activeTraits":["2-4"],"dormantTraits":["2-4"],"directive":"2-3 sentences: behavior, tells, habits","relationshipUpdates":{"Name":{"stance":"...","tension":0-10}},"trustUpdates":{"Name":0-10},"secretWillingnessUpdates":{"0":0-10},"journalEntry":"1-2 sentences in character voice as their private writings","journalSignificance":0-10}';
     try {
-        const r = await callAI(prompt, 700); if (!r) { if (verbose) toastr.error('No response: ' + g.name, 'Codex'); return; }
+        const r = await callAI(prompt, 900); if (!r) { if (verbose) toastr.error('No response: ' + g.name, 'Codex'); return; }
         const data = parseJson(r); if (!data) { if (verbose) toastr.warning('Parse fail: ' + g.name, 'Codex', { timeOut: 5000 }); return; }
         for (const f of ['currentMood', 'activeGoal', 'stance', 'hiding', 'fear', 'recentMemory', 'directive']) { if (data[f] && data[f] !== state[f]) { addHistory(g.name, f, state[f], data[f]); state[f] = data[f]; } }
         if (Array.isArray(data.activeTraits)) state.activeTraits = data.activeTraits;
@@ -287,9 +321,48 @@ async function updateState(charId, verbose = false) {
         if (data.relationshipUpdates) for (const [n, u] of Object.entries(data.relationshipUpdates)) { if (!state.relationships[n]) state.relationships[n] = { stance: '', tension: 5 }; if (u.stance) { addHistory(g.name, 'rel:' + n, state.relationships[n].stance, u.stance); state.relationships[n].stance = u.stance; } if (u.tension !== undefined) state.relationships[n].tension = Math.max(0, Math.min(10, u.tension)); }
         if (data.trustUpdates) { if (!state.trustLevels) state.trustLevels = {}; for (const [n, v] of Object.entries(data.trustUpdates)) state.trustLevels[n] = Math.max(0, Math.min(10, v)); }
         if (data.secretWillingnessUpdates) { if (!state.secretWillingness) state.secretWillingness = {}; for (const [i, v] of Object.entries(data.secretWillingnessUpdates)) state.secretWillingness[parseInt(i)] = Math.max(0, Math.min(10, v)); }
+        // v3: Journal entry
+        if (data.journalEntry && data.journalEntry.trim()) {
+            if (!Array.isArray(state.journal)) state.journal = [];
+            state.journal.push({ content: data.journalEntry.trim(), timestamp: Date.now(), messageIndex: (getContext()?.chat?.length || 0), significance: Math.max(0, Math.min(10, data.journalSignificance || 5)), pivotal: (data.journalSignificance || 0) >= 9, tags: [] });
+            if (state.journal.length > 50) state.journal = state.journal.slice(-50);
+        }
         state.lastUpdated = Date.now(); state.updateCount++; state.scenesSinceUpdate = 0;
         if (verbose) toastr.success(g.name + ': ' + state.currentMood, 'Codex', { timeOut: 2000 });
     } catch (e) { if (verbose) toastr.error(g.name + ': ' + e.message, 'Codex'); }
+}
+
+// ═══ JOURNAL SELECTION ═══
+
+/** Pick the N most relevant journal entries for injection */
+function selectJournalEntries(charId, count) {
+    const state = getChatStateFor(charId);
+    if (!Array.isArray(state.journal) || !state.journal.length) return [];
+    const msgIndex = getContext()?.chat?.length || 0;
+    return state.journal
+        .filter(j => j.significance > 1 || j.pivotal)
+        .map(j => {
+            const age = Math.max(1, msgIndex - (j.messageIndex || 0));
+            const recencyBoost = Math.max(0.2, 1 - (age / 100));
+            const score = (j.pivotal ? 10 : j.significance) * recencyBoost;
+            return { ...j, score };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, count);
+}
+
+/** Decay journal significance over time */
+function decayJournalEntries(charId) {
+    const state = getChatStateFor(charId);
+    if (!Array.isArray(state.journal)) return;
+    const msgIndex = getContext()?.chat?.length || 0;
+    for (const entry of state.journal) {
+        if (entry.pivotal) continue; // pivotal entries never decay
+        const age = msgIndex - (entry.messageIndex || 0);
+        if (age > 0 && age % 10 === 0 && entry.significance > 1) {
+            entry.significance = Math.max(1, entry.significance - 1);
+        }
+    }
 }
 
 // ═══ INJECTION ═══
@@ -298,7 +371,29 @@ function injectDirectives() {
     const s = getSettings(), active = getActiveChars();
     if (!active.length) { try { setExtensionPrompt(INJECT_KEY, '', 1, 0, false); } catch {} return; }
     const blocks = active.filter(c => c.directive).map(c => {
-        let b = '[CHARACTER STATE — ' + c.name + ']\n' + c.directive.substring(0, s.maxDirectiveLength);
+        let b = '';
+        
+        // v3: Journal entries (injected BEFORE directive for voice priming)
+        const journalEntries = selectJournalEntries(c.id, s.journalInjectionCount || 2);
+        if (journalEntries.length) {
+            b += '[' + c.name + ' — RECENT MEMORY]\n';
+            b += journalEntries.map(j => '"' + j.content + '"').join('\n');
+            b += '\n\n';
+        }
+        
+        b += '[CHARACTER STATE — ' + c.name + ']\n' + c.directive.substring(0, s.maxDirectiveLength);
+        
+        // v3: Voice profile
+        const vp = c.voiceProfile;
+        if (vp && (vp.register || vp.sampleCadence)) {
+            let voice = '\nVoice: ';
+            if (vp.register) voice += vp.register;
+            if (vp.sentencePattern) voice += '. ' + vp.sentencePattern;
+            if (vp.avoids) voice += '. Avoids: ' + vp.avoids;
+            if (vp.sampleCadence) voice += '\nCadence example: "' + vp.sampleCadence + '"';
+            b += voice;
+        }
+        
         if (c.hiding && c.hiding !== 'nothing') b += '\nHiding: ' + c.hiding;
         if (c.activeGoal) b += '\nGoal: ' + c.activeGoal;
         const tells = (c.secrets || []).filter(sec => sec.behavioralTell).map(sec => sec.behavioralTell);
@@ -324,7 +419,7 @@ async function importFromLexicon(worldName) {
     for (const e of entries) {
         if (Object.values(s.characters).some(c => c.lexiconEntryId === e.id)) continue;
         const ch = newGlobalCharacter(e.title, 'lexicon');
-        ch.core = (e.content || '').substring(0, 3000); ch.lexiconEntryId = e.id;
+        ch.core = (e.content || '').substring(0, 12000); ch.lexiconEntryId = e.id;
         ch.linkedLexiconEntries = [e.id]; ch.world = world;
         s.characters[ch.id] = ch; count++;
     }
@@ -349,7 +444,7 @@ async function importFromSTCards(worldName) {
     for (const card of ctx.characters) {
         if (!card?.name) continue;
         if (Object.values(s.characters).some(c => c.name === card.name)) continue;
-        const desc = (card.data?.description || card.description || '').substring(0, 3000);
+        const desc = (card.data?.description || card.description || '').substring(0, 8000);
         const personality = (card.data?.personality || card.personality || '').substring(0, 1500);
         const core = [desc, personality].filter(Boolean).join('\n\n');
         if (!core.trim()) continue;
@@ -376,7 +471,7 @@ async function importSingleCard(cardName, worldName) {
     if (!card) { toastr.warning('Card not found: ' + cardName, 'Codex'); return 0; }
     if (Object.values(s.characters).some(c => c.name === card.name)) { toastr.info(card.name + ' already imported', 'Codex'); return 0; }
 
-    const desc = (card.data?.description || card.description || '').substring(0, 3000);
+    const desc = (card.data?.description || card.description || '').substring(0, 8000);
     const personality = (card.data?.personality || card.personality || '').substring(0, 1500);
     const scenario = (card.data?.scenario || card.scenario || '').substring(0, 500);
     const core = [desc, personality, scenario].filter(Boolean).join('\n\n');
@@ -426,6 +521,10 @@ function registerAPI() {
         isSecretAtRisk: (n) => { const g = getByName(n); if (!g) return { atRisk: 0 }; return { atRisk: getChatStateFor(g.id).secretsAtRisk, entries: g.linkedLexiconEntries }; },
         getAllCharacters: () => getAllGlobal().map(g => getFullChar(g.id)),
         getCharacterHistory: (n, lim = 20) => (getChat().characterHistory || []).filter(h => h.characterName === n).slice(-lim),
+        // v3: Journal
+        getCharacterJournal: (n, lim = 10) => { const g = getByName(n); if (!g) return []; return (getChatStateFor(g.id).journal || []).slice(-lim); },
+        getSignificantMemories: (n) => { const g = getByName(n); if (!g) return []; return (getChatStateFor(g.id).journal || []).filter(j => j.significance >= 7 || j.pivotal); },
+        getVoiceProfile: (n) => { const g = getByName(n); return g?.voiceProfile || null; },
     };
 }
 
@@ -455,7 +554,7 @@ let currentDossier = null;
 
 function createPanel() {
     if ($('#codex-panel').length) return;
-    $('body').append('<div id="codex-panel" class="codex-panel" style="display:none;"><div class="codex-header"><span class="codex-title"><i class="fa-solid fa-users"></i> ' + EXT_NAME + ' <span class="codex-vtag">v2.1</span></span><div class="codex-header-btns"><button class="codex-icon-btn" id="codex-refresh" title="Update"><i class="fa-solid fa-arrows-rotate"></i></button><button class="codex-icon-btn" id="codex-close"><i class="fa-solid fa-xmark"></i></button></div></div><div class="codex-tabs"><button class="codex-tab active" data-tab="cast">Cast</button><button class="codex-tab" data-tab="relationships">Relations</button><button class="codex-tab" data-tab="history">History</button><button class="codex-tab" data-tab="import">Import</button><button class="codex-tab" data-tab="settings">Settings</button></div><div class="codex-pane" id="codex-pane-cast"><div id="codex-cast-list"></div></div><div class="codex-pane" id="codex-pane-dossier" style="display:none;"><div id="codex-dossier-content"></div></div><div class="codex-pane" id="codex-pane-relationships" style="display:none;"><div id="codex-rel-list"></div></div><div class="codex-pane" id="codex-pane-history" style="display:none;"><div class="codex-history-header"><span>Log</span><button class="codex-btn codex-btn-sm" id="codex-history-clear">Clear</button></div><div id="codex-history-list"></div></div><div class="codex-pane" id="codex-pane-import" style="display:none;"><div class="codex-import-section"><b>From Lexicon</b><input type="text" id="codex-import-world" class="codex-input" placeholder="World name"/><button class="codex-btn codex-btn-primary" id="codex-import-lexicon">Import from Lexicon</button></div><div class="codex-import-section"><b>From ST Character Cards</b><p style="font-size:11px;opacity:0.5;margin:2px 0 6px;">Pick a card or import all.</p><select id="codex-card-picker" class="codex-input"><option value="">Select a character...</option></select><button class="codex-btn codex-btn-primary" id="codex-import-one-card">Import Selected</button><button class="codex-btn" id="codex-import-cards" style="margin-top:4px;">Import All Cards</button></div><div class="codex-import-section"><b>Manual</b><input type="text" id="codex-m-name" class="codex-input" placeholder="Name"/><textarea id="codex-m-core" class="codex-input" rows="3" placeholder="Description"></textarea><input type="text" id="codex-m-aliases" class="codex-input" placeholder="Aliases (comma separated)"/><input type="text" id="codex-m-world" class="codex-input" placeholder="World"/><button class="codex-btn codex-btn-primary" id="codex-m-save">Create</button></div></div><div class="codex-pane codex-settings-pane" id="codex-pane-settings" style="display:none;"><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-enabled"/> <b>Enable</b></label></div><div class="codex-sg"><b>Update:</b> <label class="codex-check"><input type="radio" name="codex-update" value="every_message"/> Every msg</label><label class="codex-check"><input type="radio" name="codex-update" value="on_mention"/> Mention</label><label class="codex-check"><input type="radio" name="codex-update" value="every_n"/> Every N</label><label class="codex-check"><input type="radio" name="codex-update" value="manual"/> Manual</label></div><div class="codex-sg"><b>Detection:</b> <label class="codex-check"><input type="radio" name="codex-detect" value="ai"/> AI</label><label class="codex-check"><input type="radio" name="codex-detect" value="keyword"/> KW</label><label class="codex-check"><input type="radio" name="codex-detect" value="manual"/> Manual</label></div><div class="codex-sg"><b>Max</b> <span id="codex-max-val">3</span><input type="range" id="codex-s-max" min="1" max="6" value="3"/></div><div class="codex-sg"><b>Depth</b> <span id="codex-depth-val">1</span><input type="range" id="codex-s-depth" min="0" max="6" value="1"/></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-rels"/> Relationships</label></div><div class="codex-sg"><b>Profile</b><select id="codex-s-profile"><option value="current">Current</option></select></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-lexicon"/> Lexicon</label></div><div class="codex-sg"><button class="codex-btn codex-btn-danger" id="codex-clear-all">Clear all</button></div></div></div>');
+    $('body').append('<div id="codex-panel" class="codex-panel" style="display:none;"><div class="codex-header"><span class="codex-title"><i class="fa-solid fa-users"></i> ' + EXT_NAME + ' <span class="codex-vtag">v3</span></span><div class="codex-header-btns"><button class="codex-icon-btn" id="codex-refresh" title="Update"><i class="fa-solid fa-arrows-rotate"></i></button><button class="codex-icon-btn" id="codex-close"><i class="fa-solid fa-xmark"></i></button></div></div><div class="codex-tabs"><button class="codex-tab active" data-tab="cast">Cast</button><button class="codex-tab" data-tab="relationships">Relations</button><button class="codex-tab" data-tab="history">History</button><button class="codex-tab" data-tab="import">Import</button><button class="codex-tab" data-tab="settings">Settings</button></div><div class="codex-pane" id="codex-pane-cast"><div id="codex-cast-list"></div></div><div class="codex-pane" id="codex-pane-dossier" style="display:none;"><div id="codex-dossier-content"></div></div><div class="codex-pane" id="codex-pane-relationships" style="display:none;"><div id="codex-rel-list"></div></div><div class="codex-pane" id="codex-pane-history" style="display:none;"><div class="codex-history-header"><span>Log</span><button class="codex-btn codex-btn-sm" id="codex-history-clear">Clear</button></div><div id="codex-history-list"></div></div><div class="codex-pane" id="codex-pane-import" style="display:none;"><div class="codex-import-section"><b>From Lexicon</b><input type="text" id="codex-import-world" class="codex-input" placeholder="World name"/><button class="codex-btn codex-btn-primary" id="codex-import-lexicon">Import from Lexicon</button></div><div class="codex-import-section"><b>From ST Character Cards</b><p style="font-size:11px;opacity:0.5;margin:2px 0 6px;">Pick a card or import all.</p><select id="codex-card-picker" class="codex-input"><option value="">Select a character...</option></select><button class="codex-btn codex-btn-primary" id="codex-import-one-card">Import Selected</button><button class="codex-btn" id="codex-import-cards" style="margin-top:4px;">Import All Cards</button></div><div class="codex-import-section"><b>Manual</b><input type="text" id="codex-m-name" class="codex-input" placeholder="Name"/><textarea id="codex-m-core" class="codex-input" rows="3" placeholder="Description"></textarea><input type="text" id="codex-m-aliases" class="codex-input" placeholder="Aliases (comma separated)"/><input type="text" id="codex-m-world" class="codex-input" placeholder="World"/><button class="codex-btn codex-btn-primary" id="codex-m-save">Create</button></div></div><div class="codex-pane codex-settings-pane" id="codex-pane-settings" style="display:none;"><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-enabled"/> <b>Enable</b></label></div><div class="codex-sg"><b>Update:</b> <label class="codex-check"><input type="radio" name="codex-update" value="every_message"/> Every msg</label><label class="codex-check"><input type="radio" name="codex-update" value="on_mention"/> Mention</label><label class="codex-check"><input type="radio" name="codex-update" value="every_n"/> Every N</label><label class="codex-check"><input type="radio" name="codex-update" value="manual"/> Manual</label></div><div class="codex-sg"><b>Detection:</b> <label class="codex-check"><input type="radio" name="codex-detect" value="ai"/> AI</label><label class="codex-check"><input type="radio" name="codex-detect" value="keyword"/> KW</label><label class="codex-check"><input type="radio" name="codex-detect" value="manual"/> Manual</label></div><div class="codex-sg"><b>Max</b> <span id="codex-max-val">3</span><input type="range" id="codex-s-max" min="1" max="6" value="3"/></div><div class="codex-sg"><b>Depth</b> <span id="codex-depth-val">1</span><input type="range" id="codex-s-depth" min="0" max="6" value="1"/></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-rels"/> Relationships</label></div><div class="codex-sg"><b>Profile</b><select id="codex-s-profile"><option value="current">Current</option></select></div><div class="codex-sg"><label class="codex-check"><input type="checkbox" id="codex-s-lexicon"/> Lexicon</label></div><div class="codex-sg"><button class="codex-btn codex-btn-danger" id="codex-clear-all">Clear all</button></div></div></div>');
     bindEvents();
 }
 
@@ -521,6 +620,32 @@ function renderDossier(charId) {
     }
 
     const secCount = (g.secrets || []).length;
+    const journalCount = (state.journal || []).length;
+
+    // v3: Voice profile display
+    const vp = g.voiceProfile || {};
+    let voiceHtml = '<div class="codex-empty">Not profiled yet.</div>';
+    if (vp.register || vp.sampleCadence) {
+        voiceHtml = '';
+        if (vp.register) voiceHtml += '<div class="codex-dossier-section"><div class="codex-dossier-label">REGISTER</div><div>' + xss(vp.register) + '</div></div>';
+        if (vp.vocabulary) voiceHtml += '<div class="codex-dossier-section"><div class="codex-dossier-label">VOCABULARY</div><div>' + xss(vp.vocabulary) + '</div></div>';
+        if (vp.sentencePattern) voiceHtml += '<div class="codex-dossier-section"><div class="codex-dossier-label">PATTERN</div><div>' + xss(vp.sentencePattern) + '</div></div>';
+        if (vp.avoids) voiceHtml += '<div class="codex-dossier-section"><div class="codex-dossier-label">AVOIDS</div><div>' + xss(vp.avoids) + '</div></div>';
+        if (vp.sampleCadence) voiceHtml += '<div class="codex-dossier-section"><div class="codex-dossier-label">CADENCE</div><div class="codex-journal-entry"><i>' + xss(vp.sampleCadence) + '</i></div></div>';
+    }
+
+    // v3: Journal display
+    let journalHtml = '<div class="codex-empty">No entries yet. Entries are created automatically during character updates.</div>';
+    if (journalCount > 0) {
+        const jFormat = g.journalFormat || 'journal';
+        journalHtml = '<div class="codex-journal-format">' + xss(jFormat) + (g.journalStyle ? ' — ' + xss(g.journalStyle) : '') + '</div>';
+        journalHtml += (state.journal || []).slice().reverse().slice(0, 20).map(function(j) {
+            const t = new Date(j.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const sig = j.significance || 0;
+            const sigBar = '<span class="codex-sig-dots">' + Array.from({length: 10}, function(_, k) { return '<span class="codex-sig-dot' + (k < sig ? ' codex-sig-active' : '') + (j.pivotal ? ' codex-sig-pivotal' : '') + '"></span>'; }).join('') + '</span>';
+            return '<div class="codex-journal-entry' + (j.pivotal ? ' codex-journal-pivotal' : '') + '"><div class="codex-journal-meta">' + t + ' ' + sigBar + (j.pivotal ? ' <span class="codex-badge codex-badge-pinned">pivotal</span>' : '') + '</div><div class="codex-journal-text">' + xss(j.content) + '</div></div>';
+        }).join('');
+    }
 
     const h = '<div class="codex-dossier">'
         + '<div class="codex-dossier-back" id="codex-dossier-back"><i class="fa-solid fa-arrow-left"></i> Back</div>'
@@ -563,6 +688,20 @@ function renderDossier(charId) {
         + '<div class="codex-collapsible-header" data-section="rels"><i class="fa-solid fa-chevron-right"></i> RELATIONSHIPS <span class="codex-section-count">' + relCount + '</span></div>'
         + '<div class="codex-collapsible-body" style="display:none;">'
         + relsHtml
+        + '</div></div>'
+
+        // ── Voice (collapsible)
+        + '<div class="codex-collapsible">'
+        + '<div class="codex-collapsible-header" data-section="voice"><i class="fa-solid fa-chevron-right"></i> VOICE</div>'
+        + '<div class="codex-collapsible-body" style="display:none;">'
+        + voiceHtml
+        + '</div></div>'
+
+        // ── Journal (collapsible)
+        + '<div class="codex-collapsible">'
+        + '<div class="codex-collapsible-header" data-section="journal"><i class="fa-solid fa-chevron-right"></i> JOURNAL <span class="codex-section-count">' + journalCount + '</span></div>'
+        + '<div class="codex-collapsible-body" style="display:none;">'
+        + journalHtml
         + '</div></div>'
 
         // ── Actions (always visible)
@@ -683,6 +822,13 @@ function bindEvents() {
         g.emotionalCore = form.find('.codex-ef-ecore').val().trim();
         g.coreTraits = form.find('.codex-ef-ctraits').val().split(',').map(t => t.trim()).filter(Boolean);
         g.growthPermission = form.find('.codex-ef-growth').val();
+        // v3: Voice + Journal
+        if (!g.voiceProfile) g.voiceProfile = {};
+        const vReg = form.find('.codex-ef-vregister').val().trim();
+        const vCad = form.find('.codex-ef-vcadence').val().trim();
+        if (vReg) g.voiceProfile.register = vReg;
+        if (vCad) g.voiceProfile.sampleCadence = vCad;
+        g.journalFormat = form.find('.codex-ef-jformat').val() || '';
         if (!s.worlds.includes(g.world)) s.worlds.push(g.world);
         s.worlds = s.worlds.filter(w => Object.values(s.characters).some(c => c.world === w));
         saveGlobal(); toastr.success(g.name + ' updated', 'Codex'); renderDossier(id);

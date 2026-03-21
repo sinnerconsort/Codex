@@ -101,3 +101,14 @@
 /* ── World Rename Button ─────────────────────────────────── */
 .codex-world-rename { width: 24px; height: 24px; font-size: 11px; margin-left: 4px; opacity: 0.4; }
 .codex-world-rename:hover { opacity: 1; }
+
+/* ── Journal (v3) ────────────────────────────────────────── */
+.codex-journal-format { font-size: 11px; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-style: italic; }
+.codex-journal-entry { padding: 6px 8px; margin-bottom: 4px; background: rgba(255,255,255,0.02); border-radius: 6px; border-left: 2px solid rgba(140,160,200,0.2); }
+.codex-journal-entry.codex-journal-pivotal { border-left-color: rgba(200,180,120,0.6); background: rgba(200,180,120,0.04); }
+.codex-journal-meta { font-size: 10px; opacity: 0.5; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
+.codex-journal-text { font-size: 12px; line-height: 1.5; font-style: italic; }
+.codex-sig-dots { display: inline-flex; gap: 2px; }
+.codex-sig-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.1); display: inline-block; }
+.codex-sig-dot.codex-sig-active { background: rgba(140,180,220,0.6); }
+.codex-sig-dot.codex-sig-pivotal.codex-sig-active { background: rgba(200,180,120,0.8); }
