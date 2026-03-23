@@ -130,8 +130,8 @@
     padding: 16px; resize: none; outline: none; font-family: inherit;
 }
 .codex-expand-btn {
-    width: 28px; height: 28px; font-size: 12px; opacity: 0.4;
-    position: absolute; right: 6px; top: 6px;
+    width: 28px; height: 28px; font-size: 12px; opacity: 0.3;
+    display: block; margin-left: auto; margin-top: -34px; margin-bottom: 6px;
+    margin-right: 2px; position: relative; z-index: 2;
 }
 .codex-expand-btn:hover { opacity: 1; }
-.codex-import-section, .codex-collab-form { position: relative; }
