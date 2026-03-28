@@ -135,3 +135,7 @@
     margin-right: 2px; position: relative; z-index: 2;
 }
 .codex-expand-btn:hover { opacity: 1; }
+
+/* ── Relations Filter ────────────────────────────────────── */
+.codex-rel-filter-row { margin-bottom: 8px; }
+.codex-rel-filter-row select { width: 100%; }

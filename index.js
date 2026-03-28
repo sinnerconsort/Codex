@@ -271,7 +271,26 @@ async function extractRelationships(worldName) {
 async function detectActive() {
     const s = getSettings(), c = getChat(), all = getAllGlobal(); if (!all.length) return [];
     if (s.sceneDetection === 'manual') return c.activeCharacters || [];
-    const rel = c.activeWorlds.length > 0 ? all.filter(ch => c.activeWorlds.includes(ch.world)) : all;
+    
+    // Auto-detect relevant worlds from current character card name
+    let rel;
+    if (c.activeWorlds?.length > 0) {
+        rel = all.filter(ch => c.activeWorlds.includes(ch.world));
+    } else {
+        // Try to detect world from current character card
+        const ctx = getContext();
+        const cardName = ctx?.name2 || '';
+        const matchedChar = all.find(ch => ch.name === cardName || ch.aliases?.includes(cardName));
+        if (matchedChar?.world && matchedChar.world !== 'Uncategorized') {
+            // Scope to matched character's world + any manually pinned characters
+            const pinned = (c.manuallyPinned || []);
+            rel = all.filter(ch => ch.world === matchedChar.world || pinned.includes(ch.id));
+        } else {
+            // No world detected — use all (legacy behavior)
+            rel = all;
+        }
+    }
+    
     if (!rel.length) return []; if (s.sceneDetection === 'keyword') return detectKW(rel);
     return await detectAI(rel);
 }
@@ -747,9 +766,51 @@ function renderDossier(charId) {
 // ═══ RENDER: RELS, HISTORY, SETTINGS ═══
 
 function renderRels() {
-    const rels = []; for (const g of getAllGlobal()) { const s = getChatStateFor(g.id); for (const [n, r] of Object.entries(s.relationships || {})) rels.push({ from: g.name, to: n, stance: r.stance, tension: r.tension }); }
-    if (!rels.length) { $('#codex-rel-list').html('<div class="codex-empty">None.</div>'); return; }
-    $('#codex-rel-list').html(rels.map(r => { const p = (r.tension / 10) * 100, c = r.tension > 7 ? '#c45c5c' : r.tension > 4 ? '#b8a460' : '#7a9e7e'; return '<div class="codex-rel-card"><b>' + xss(r.from) + '</b> \u2192 <b>' + xss(r.to) + '</b>: ' + xss(r.stance) + '<div class="codex-tension-bar"><div class="codex-tension-fill" style="width:' + p + '%;background:' + c + ';"></div></div></div>'; }).join(''));
+    const chat = getChat(), s = getSettings();
+    const activeIds = chat.activeCharacters || [];
+    
+    // Determine active worlds from active characters
+    const activeWorlds = new Set();
+    for (const id of activeIds) {
+        const g = s.characters[id];
+        if (g?.world) activeWorlds.add(g.world);
+    }
+    
+    // Build world filter dropdown
+    const allWorlds = [...new Set(Object.values(s.characters).map(c => c.world).filter(Boolean))];
+    const filterWorld = $('#codex-rel-filter').val() || 'active';
+    
+    let filterHtml = '<div class="codex-rel-filter-row"><select id="codex-rel-filter" class="codex-input" style="font-size:11px;padding:4px 6px;"><option value="active">Active worlds only</option><option value="all">All worlds</option>';
+    for (const w of allWorlds) filterHtml += '<option value="' + xss(w) + '">' + xss(w) + '</option>';
+    filterHtml += '</select></div>';
+    
+    // Filter characters by selected world scope
+    let chars;
+    if (filterWorld === 'all') {
+        chars = getAllGlobal();
+    } else if (filterWorld === 'active') {
+        chars = getAllGlobal().filter(c => activeWorlds.has(c.world) || activeIds.includes(c.id));
+    } else {
+        chars = getAllGlobal().filter(c => c.world === filterWorld);
+    }
+    
+    const rels = [];
+    for (const g of chars) {
+        const st = getChatStateFor(g.id);
+        for (const [n, r] of Object.entries(st.relationships || {})) {
+            rels.push({ from: g.name, to: n, stance: r.stance, tension: r.tension, world: g.world });
+        }
+    }
+    
+    if (!rels.length) {
+        $('#codex-rel-list').html(filterHtml + '<div class="codex-empty">' + (filterWorld === 'active' && !activeIds.length ? 'No active characters. Start a scene first.' : 'No relationships in this scope.') + '</div>');
+        return;
+    }
+    
+    $('#codex-rel-list').html(filterHtml + rels.map(r => {
+        const p = (r.tension / 10) * 100, c = r.tension > 7 ? '#c45c5c' : r.tension > 4 ? '#b8a460' : '#7a9e7e';
+        return '<div class="codex-rel-card"><b>' + xss(r.from) + '</b> \u2192 <b>' + xss(r.to) + '</b>: ' + xss(r.stance) + '<div class="codex-tension-bar"><div class="codex-tension-fill" style="width:' + p + '%;background:' + c + ';"></div></div></div>';
+    }).join(''));
 }
 
 function renderHistory() {
@@ -811,6 +872,7 @@ function bindEvents() {
     $('#codex-s-lexicon').on('change', function () { getSettings().useLexicon = this.checked; saveGlobal(); });
     $('#codex-clear-all').on('click', () => { if (!confirm('Clear ALL?')) return; getSettings().characters = {}; getSettings().worlds = []; getChat().characterStates = {}; getChat().activeCharacters = []; getChat().manuallyPinned = []; saveGlobal(); saveChatData(); renderCast(); });
     $('#codex-history-clear').on('click', () => { getChat().characterHistory = []; saveChatData(); renderHistory(); });
+    $(document).on('change', '#codex-rel-filter', () => renderRels());
     // Cast
     $(document).on('click', '.codex-cast-card', function (e) { if ($(e.target).closest('.codex-icon-btn').length) return; openDossier($(this).data('id')); });
     $(document).on('click', '.codex-char-toggle', function (e) { e.stopPropagation(); const id = $(this).data('id'), c = getChat(); if (!Array.isArray(c.manuallyPinned)) c.manuallyPinned = []; if (c.activeCharacters.includes(id)) { c.activeCharacters = c.activeCharacters.filter(i => i !== id); c.manuallyPinned = c.manuallyPinned.filter(i => i !== id); } else { c.activeCharacters.push(id); if (!c.manuallyPinned.includes(id)) c.manuallyPinned.push(id); } saveChatData(); renderCast(); });
