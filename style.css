@@ -1,141 +1,346 @@
-/* The Codex v2.1 */
-.codex-panel{position:fixed;top:45px;left:50%;transform:translateX(-50%);width:min(94vw,480px);max-height:calc(100vh - 110px);z-index:100000;background:var(--SmartThemeBlurTintColor,rgba(18,18,30,0.97));border:1px solid rgba(255,255,255,0.12);border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.6);backdrop-filter:blur(12px);color:var(--SmartThemeBodyColor,#d4cfc4);font-size:13px;}
-.codex-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;}
-.codex-title{font-weight:600;font-size:14px;display:flex;align-items:center;gap:6px;}
-.codex-vtag{font-size:10px;opacity:0.5;font-weight:400;}
-.codex-header-btns{display:flex;gap:6px;}
-.codex-tabs{display:flex;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;overflow-x:auto;}
-.codex-tab{flex:1;min-width:0;padding:8px 4px;background:none;border:none;color:var(--SmartThemeBodyColor,#aaa);cursor:pointer;font-size:11px;white-space:nowrap;border-bottom:2px solid transparent;transition:color 0.15s;}
-.codex-tab:hover{color:#fff;}.codex-tab.active{color:#fff;border-bottom-color:rgba(140,160,200,0.7);}
-.codex-pane{overflow-y:auto;padding:12px 14px;flex:1;min-height:0;}
-.codex-btn{padding:6px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:var(--SmartThemeBodyColor,#ccc);cursor:pointer;font-size:12px;transition:background 0.15s;}
-.codex-btn:hover{background:rgba(255,255,255,0.12);}
-.codex-btn-primary{background:rgba(120,140,200,0.2);border-color:rgba(120,140,200,0.35);}
-.codex-btn-danger{background:rgba(200,80,80,0.15);border-color:rgba(200,80,80,0.3);color:rgba(255,140,140,0.9);}
-.codex-btn-sm{padding:3px 8px;font-size:11px;}
-.codex-icon-btn{width:30px;height:30px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--SmartThemeBodyColor,#aaa);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;transition:background 0.15s;}
-.codex-icon-btn:hover{background:rgba(255,255,255,0.1);}
-.codex-input{width:100%;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:inherit;font-size:12px;font-family:inherit;box-sizing:border-box;margin-bottom:4px;}
-.codex-empty{text-align:center;padding:20px 12px;opacity:0.4;font-size:12px;}
-.codex-empty-inline{opacity:0.4;font-size:11px;font-style:italic;}
-.codex-badge{font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.06);white-space:nowrap;}
-.codex-badge-active{border-color:rgba(120,200,140,0.4);color:rgba(140,220,160,0.9);background:rgba(120,200,140,0.1);}
-.codex-badge-pinned{border-color:rgba(200,180,120,0.4);color:rgba(220,200,140,0.9);background:rgba(200,180,120,0.1);}
-.codex-badge-source{font-size:9px;opacity:0.4;text-transform:uppercase;}
-.codex-badge-danger{border-color:rgba(200,80,80,0.4);color:rgba(255,130,130,0.9);background:rgba(200,80,80,0.1);}
-/* World groups */
-.codex-world-header{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;border-radius:6px;margin-bottom:4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);user-select:none;}
-.codex-world-header:hover{background:rgba(255,255,255,0.08);}
-.codex-world-header i{font-size:10px;opacity:0.5;width:12px;}
-.codex-world-name{font-weight:600;font-size:13px;}
-.codex-world-count{margin-left:auto;font-size:11px;opacity:0.5;}
-.codex-world-group{margin-left:4px;margin-bottom:12px;border-left:2px solid rgba(140,160,200,0.15);padding-left:8px;display:flex;flex-direction:column;gap:4px;}
-/* Compact cast cards */
-.codex-cast-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;cursor:pointer;border-left:3px solid rgba(140,160,200,0.2);transition:border-color 0.15s;}
-.codex-cast-card:hover{border-left-color:rgba(140,160,200,0.5);}
-.codex-cast-card.codex-char-active{background:rgba(120,200,140,0.04);border-left-color:rgba(120,200,140,0.5);}
-.codex-cast-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
-.codex-cast-name{font-weight:600;font-size:13px;}
-.codex-cast-arch{font-size:10px;opacity:0.5;font-style:italic;margin-left:4px;}
-.codex-cast-btns{margin-left:auto;}
-.codex-cast-mood{font-size:11px;opacity:0.7;margin-top:2px;}
-/* Dossier */
-.codex-dossier{padding-bottom:20px;}
-.codex-dossier-back{cursor:pointer;font-size:12px;opacity:0.6;margin-bottom:8px;display:flex;align-items:center;gap:4px;}
-.codex-dossier-back:hover{opacity:1;}
-.codex-dossier-name{font-size:18px;font-weight:700;margin-bottom:2px;display:flex;align-items:center;gap:8px;}
-.codex-dossier-meta{font-size:11px;opacity:0.5;margin-bottom:12px;}
-.codex-dossier-section{margin-bottom:8px;}
-.codex-dossier-label{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.5;margin-bottom:2px;}
-.codex-dossier-value{font-size:13px;line-height:1.5;}
-.codex-val-hiding{color:rgba(200,130,130,0.8);}
-.codex-dossier-divider{border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;}
-.codex-dossier-section-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;margin-bottom:8px;}
-.codex-dossier-actions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
-.codex-trajectory{font-size:12px;opacity:0.7;font-style:italic;}
-/* Traits */
-.codex-trait{font-size:10px;padding:1px 6px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);display:inline-block;margin:1px;}
-.codex-trait-active{border-color:rgba(140,180,220,0.3);color:rgba(160,200,240,0.8);background:rgba(140,180,220,0.08);}
-.codex-trait-dormant{opacity:0.4;text-decoration:line-through;}
-.codex-pills{display:flex;flex-wrap:wrap;gap:3px;}
-.codex-habit-pill{font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);}
-/* Secrets */
-.codex-secret-card{padding:8px;margin-bottom:6px;border-radius:6px;border-left:3px solid;background:rgba(255,255,255,0.02);}
-.codex-secret-header{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:11px;}
-.codex-secret-tell,.codex-secret-reveal{font-size:11px;opacity:0.6;margin-top:3px;font-style:italic;}
-.codex-secret-willingness{opacity:0.5;}
-/* Relationships */
-.codex-rel-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 8px;margin-bottom:4px;font-size:12px;}
-.codex-tension-bar{height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin:3px 0;}
-.codex-tension-fill{height:100%;border-radius:2px;transition:width 0.3s;}
-/* History */
-.codex-history-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:600;}
-.codex-history-entry{font-size:11px;padding:2px 4px;line-height:1.5;}
-.codex-history-entry:nth-child(odd){background:rgba(255,255,255,0.02);}
-.codex-hist-time{opacity:0.4;margin-right:4px;}.codex-hist-old{opacity:0.4;text-decoration:line-through;}.codex-hist-new{color:rgba(160,220,180,0.8);}
-/* Edit forms */
-.codex-collab-form,.codex-edit-form{margin-top:10px;padding:10px;background:rgba(255,255,255,0.02);border-radius:8px;display:flex;flex-direction:column;gap:4px;}
-.codex-edit-label{font-size:10px;opacity:0.5;margin-top:4px;}
-/* Import */
-.codex-import-section{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.06);}
-.codex-import-section:last-child{border-bottom:none;}
-/* Settings */
-.codex-sg{margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.04);}
-.codex-check{display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;}
-/* Mobile */
-@media(max-width:480px){.codex-panel{width:98vw;top:35px;max-height:calc(100vh - 90px);border-radius:10px;}.codex-tab{font-size:10px;padding:7px 3px;}}
+/* ═══════════════════════════════════════════════════════════════════════════
+   Codex v1.0 — Character & Story Engine
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Collapsible Dossier Sections ────────────────────────── */
-.codex-collapsible { margin-bottom: 2px; }
-.codex-collapsible-header {
-    display: flex; align-items: center; gap: 6px; padding: 8px 6px;
-    cursor: pointer; font-size: 11px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.5px; opacity: 0.7; border-bottom: 1px solid rgba(255,255,255,0.06);
-    user-select: none; transition: opacity 0.15s;
-}
-.codex-collapsible-header:hover { opacity: 1; }
-.codex-collapsible-header i { font-size: 9px; width: 10px; transition: transform 0.15s; }
-.codex-collapsible-body { padding: 6px 0; }
-.codex-section-count { font-weight: 400; opacity: 0.5; margin-left: 4px; }
+/* ── Panel Shell ────────────────────────────────────────────────────────── */
 
-/* ── World Rename Button ─────────────────────────────────── */
-.codex-world-rename { width: 24px; height: 24px; font-size: 11px; margin-left: 4px; opacity: 0.4; }
-.codex-world-rename:hover { opacity: 1; }
+.codex-panel {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+}
 
-/* ── Journal (v3) ────────────────────────────────────────── */
-.codex-journal-format { font-size: 11px; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-style: italic; }
-.codex-journal-entry { padding: 6px 8px; margin-bottom: 4px; background: rgba(255,255,255,0.02); border-radius: 6px; border-left: 2px solid rgba(140,160,200,0.2); }
-.codex-journal-entry.codex-journal-pivotal { border-left-color: rgba(200,180,120,0.6); background: rgba(200,180,120,0.04); }
-.codex-journal-meta { font-size: 10px; opacity: 0.5; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
-.codex-journal-text { font-size: 12px; line-height: 1.5; font-style: italic; }
-.codex-sig-dots { display: inline-flex; gap: 2px; }
-.codex-sig-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.1); display: inline-block; }
-.codex-sig-dot.codex-sig-active { background: rgba(140,180,220,0.6); }
-.codex-sig-dot.codex-sig-pivotal.codex-sig-active { background: rgba(200,180,120,0.8); }
+.codex-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
 
-/* ── Expand Textarea Overlay ─────────────────────────────── */
-.codex-expand-overlay {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    z-index: 200000; background: var(--SmartThemeBlurTintColor, rgba(12,12,24,0.98));
-    display: flex; flex-direction: column; padding: 0;
+.codex-title {
+    font-weight: 600;
+    font-size: 14px;
 }
-.codex-expand-header {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;
-}
-.codex-expand-title { font-size: 14px; font-weight: 600; opacity: 0.7; }
-.codex-expand-textarea {
-    flex: 1; width: 100%; border: none; background: transparent;
-    color: var(--SmartThemeBodyColor, #d4cfc4); font-size: 14px; line-height: 1.6;
-    padding: 16px; resize: none; outline: none; font-family: inherit;
-}
-.codex-expand-btn {
-    width: 28px; height: 28px; font-size: 12px; opacity: 0.3;
-    display: block; margin-left: auto; margin-top: -34px; margin-bottom: 6px;
-    margin-right: 2px; position: relative; z-index: 2;
-}
-.codex-expand-btn:hover { opacity: 1; }
 
-/* ── Relations Filter ────────────────────────────────────── */
-.codex-rel-filter-row { margin-bottom: 8px; }
-.codex-rel-filter-row select { width: 100%; }
+.codex-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.codex-close:hover { color: #ddd; background: rgba(255,255,255,0.08); }
+
+/* ── Tabs ───────────────────────────────────────────────────────────────── */
+
+.codex-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding: 0 8px;
+}
+
+.codex-tab {
+    flex: 1;
+    padding: 8px 4px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #888;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    text-align: center;
+}
+.codex-tab:hover { color: #bbb; }
+.codex-tab-active {
+    color: #ddd;
+    border-bottom-color: #8a7eb8;
+}
+
+/* ── Panes ──────────────────────────────────────────────────────────────── */
+
+.codex-pane {
+    padding: 10px 14px;
+    overflow-y: auto;
+    max-height: calc(75vh - 100px);
+}
+
+/* ── Sections ──────────────────────────────────────────────────────────── */
+
+.codex-section {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.codex-section:last-child { border-bottom: none; }
+
+.codex-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.codex-section label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 8px 0 3px;
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── Inputs ─────────────────────────────────────────────────────────────── */
+
+.codex-section input[type="text"],
+.codex-section textarea,
+.codex-section select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: inherit;
+    font-size: 12px;
+    font-family: inherit;
+    resize: vertical;
+}
+.codex-section textarea { min-height: 48px; }
+
+.codex-select {
+    padding: 4px 6px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: inherit;
+    font-size: 12px;
+    max-width: 160px;
+}
+.codex-select-sm { max-width: 130px; font-size: 11px; }
+
+.codex-section input[type="range"] {
+    width: 100%;
+    margin: 4px 0;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+
+.codex-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+    color: #ccc;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.codex-btn:hover { background: rgba(255,255,255,0.12); }
+
+.codex-btn-sm { padding: 3px 8px; font-size: 11px; }
+
+.codex-btn-primary {
+    background: rgba(138,126,184,0.3);
+    border-color: rgba(138,126,184,0.4);
+    color: #c4bde0;
+}
+.codex-btn-primary:hover { background: rgba(138,126,184,0.45); }
+
+.codex-btn-danger {
+    color: #c45c5c;
+    border-color: rgba(196,92,92,0.3);
+}
+.codex-btn-danger:hover { background: rgba(196,92,92,0.15); }
+
+.codex-btn-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.codex-btn-row-inline {
+    display: flex;
+    gap: 4px;
+}
+
+.codex-icon-btn {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+}
+.codex-icon-btn:hover { color: #ddd; }
+
+/* ── State Display ─────────────────────────────────────────────────────── */
+
+.codex-state-display {
+    margin: 6px 0;
+}
+
+.codex-state-block {
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.codex-state-line {
+    font-size: 12px;
+    line-height: 1.5;
+    margin-bottom: 4px;
+}
+.codex-state-line:last-child { margin-bottom: 0; }
+
+.codex-state-tag {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-right: 4px;
+}
+.codex-express-tag {
+    background: rgba(122,158,126,0.25);
+    color: #7a9e7e;
+}
+.codex-suppress-tag {
+    background: rgba(196,92,92,0.2);
+    color: #c45c5c;
+}
+
+/* ── Relationship ──────────────────────────────────────────────────────── */
+
+.codex-rel-display {
+    margin: 4px 0;
+}
+
+.codex-rel-text {
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+    border-left: 2px solid rgba(138,126,184,0.4);
+}
+
+/* ── Memory List ───────────────────────────────────────────────────────── */
+
+.codex-mem-list {
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.codex-mem-item {
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+    border-left: 2px solid rgba(255,255,255,0.08);
+}
+
+.codex-mem-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.codex-mem-weight {
+    flex-shrink: 0;
+    font-size: 10px;
+    margin-top: 2px;
+}
+
+.codex-mem-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.codex-mem-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.codex-mem-actions {
+    display: flex;
+    gap: 2px;
+}
+
+/* ── Badges ─────────────────────────────────────────────────────────────── */
+
+.codex-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.04);
+}
+
+.codex-count {
+    font-weight: 400;
+    opacity: 0.5;
+    font-size: 11px;
+}
+
+/* ── Hints & Helpers ───────────────────────────────────────────────────── */
+
+.codex-hint {
+    font-size: 11px;
+    opacity: 0.5;
+    line-height: 1.4;
+}
+
+.codex-placeholder {
+    text-align: center;
+    padding: 30px 10px;
+    opacity: 0.6;
+}
+
+.codex-check {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.codex-inline-row {
+    display: flex;
+    gap: 10px;
+}
+.codex-inline-row > div { flex: 1; }
+
+.codex-setting-label {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+/* ── Nudge Notification ────────────────────────────────────────────────── */
+
+.codex-nudge {
+    animation: codex-nudge-in 0.3s ease-out;
+}
+
+@keyframes codex-nudge-in {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to   { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.codex-nudge-text {
+    font-weight: 500;
+}
