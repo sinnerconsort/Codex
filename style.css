@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Codex v1.0 — Character & Story Engine
-   Profile-page philosophy: glance, don't fill out forms.
+   Three-field profile: what's changed, memories, growing toward.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .codex-panel {
@@ -29,13 +29,13 @@
 
 .cdx-header-actions {
     display: flex;
-    gap: 4px;
+    gap: 2px;
 }
 
-/* ── Main scrollable area ───────────────────────────────────────────────── */
+/* ── Main view ──────────────────────────────────────────────────────────── */
 
 .cdx-main {
-    padding: 10px 14px;
+    padding: 10px 14px 14px;
     overflow-y: auto;
     max-height: calc(75vh - 56px);
 }
@@ -69,7 +69,7 @@
 }
 .cdx-text-btn:hover { color: #b4a9d6; }
 
-.cdx-btn-save {
+.cdx-btn-primary {
     padding: 5px 14px;
     border-radius: 8px;
     border: none;
@@ -80,44 +80,72 @@
     cursor: pointer;
     min-height: 32px;
 }
-.cdx-btn-save:hover { background: rgba(138,126,184,0.45); }
+.cdx-btn-primary:hover { background: rgba(138,126,184,0.45); }
+
+.cdx-btn-sm { padding: 3px 10px; min-height: 26px; font-size: 11px; }
 
 .cdx-danger { color: #c45c5c; }
 .cdx-danger:hover { color: #e07070; }
 
-.cdx-dim { opacity: 0.5; }
+.cdx-dim { opacity: 0.45; }
 
-.cdx-section-bar {
+.cdx-empty {
+    font-size: 11px;
+    opacity: 0.4;
+    font-style: italic;
+    padding: 6px 0;
+}
+
+.cdx-hint {
+    font-size: 11px;
+    opacity: 0.4;
+    line-height: 1.5;
+    margin: 4px 0;
+}
+
+/* ── Field Sections ─────────────────────────────────────────────────────── */
+
+.cdx-field-section {
+    margin-bottom: 14px;
+}
+
+.cdx-field-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
-.cdx-section-label {
+.cdx-field-label {
+    font-size: 11px;
     font-weight: 600;
-    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    opacity: 0.6;
+    letter-spacing: 0.4px;
+    opacity: 0.5;
+    margin-bottom: 4px;
 }
 
-.cdx-input {
+.cdx-field-input {
     width: 100%;
     box-sizing: border-box;
-    padding: 7px 10px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.08);
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
     border-radius: 8px;
     color: inherit;
     font-size: 12px;
     font-family: inherit;
     resize: vertical;
-    margin-bottom: 6px;
+    line-height: 1.5;
+    transition: border-color 0.15s;
 }
-.cdx-input:focus {
-    border-color: rgba(138,126,184,0.4);
+.cdx-field-input:focus {
+    border-color: rgba(138,126,184,0.35);
     outline: none;
+    background: rgba(255,255,255,0.06);
+}
+.cdx-field-input::placeholder {
+    opacity: 0.3;
 }
 
 .cdx-mini-select {
@@ -129,189 +157,27 @@
     font-size: 11px;
 }
 
-.cdx-check-sm {
+.cdx-check {
     display: flex;
     align-items: center;
     gap: 6px;
     font-size: 12px;
     cursor: pointer;
-    padding: 4px 0;
+    padding: 5px 0;
 }
 
-/* ── Welcome (first open, no data) ──────────────────────────────────────── */
-
-.cdx-welcome {
-    text-align: center;
-    padding: 16px 8px;
-}
-
-.cdx-welcome-text {
-    font-size: 14px;
-    margin-bottom: 4px;
-}
-
-.cdx-welcome-hint {
-    font-size: 11px;
-    opacity: 0.5;
-    margin-bottom: 12px;
-    line-height: 1.5;
-}
-
-.cdx-welcome-actions {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-.cdx-welcome-btn {
-    padding: 6px 14px;
-    border-radius: 16px;
-    border: 1px solid rgba(255,255,255,0.12);
-    background: rgba(255,255,255,0.04);
-    color: #bbb;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-}
-.cdx-welcome-btn:hover {
-    background: rgba(138,126,184,0.2);
-    border-color: rgba(138,126,184,0.3);
-    color: #ddd;
-}
-
-/* ── Mood Chips ─────────────────────────────────────────────────────────── */
-
-.cdx-mood-section {
-    margin-bottom: 12px;
-}
-
-.cdx-mood-row {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    padding: 4px 0;
-}
-
-.cdx-mood-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 5px 12px;
-    border-radius: 16px;
-    border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.04);
-    color: #999;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-    user-select: none;
-    min-height: 32px;
-}
-.cdx-mood-chip:hover {
-    border-color: rgba(255,255,255,0.2);
-    color: #ccc;
-}
-
-.cdx-mood-active {
-    background: rgba(138,126,184,0.25);
-    border-color: rgba(138,126,184,0.5);
-    color: #ddd;
-    font-weight: 600;
-}
-
-.cdx-mood-add {
-    color: #666;
-    font-size: 16px;
-    padding: 5px 10px;
-    border-style: dashed;
-}
-.cdx-mood-add:hover { color: #999; }
-
-.cdx-mood-edit {
-    font-size: 10px;
-    opacity: 0;
-    transition: opacity 0.15s;
-    padding: 0 2px;
-}
-.cdx-mood-chip:hover .cdx-mood-edit { opacity: 0.6; }
-.cdx-mood-edit:hover { opacity: 1 !important; }
-
-.cdx-mood-preview {
-    font-size: 11px;
-    opacity: 0.4;
-    font-style: italic;
-    margin-top: 4px;
-    padding-left: 2px;
-}
-
-.cdx-mood-empty {
-    padding: 8px 0;
-}
-
-/* ── Relationship ──────────────────────────────────────────────────────── */
-
-.cdx-relationship {
-    margin-bottom: 14px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-
-.cdx-rel-block {
-    position: relative;
-}
-
-.cdx-rel-text {
-    font-size: 12px;
-    line-height: 1.6;
-    padding: 8px 10px;
-    background: rgba(255,255,255,0.025);
-    border-radius: 8px;
-    border-left: 2px solid rgba(138,126,184,0.3);
-}
-
-.cdx-rel-actions {
-    display: flex;
-    gap: 2px;
-    justify-content: flex-end;
-    margin-top: 4px;
-}
-
-.cdx-rel-empty {
-    font-size: 11px;
-    padding: 6px 0;
-    font-style: italic;
-}
-
-/* ── Relationship Editor ───────────────────────────────────────────────── */
-
-.cdx-rel-editor {
-    padding: 10px 14px;
-    border-top: 1px solid rgba(255,255,255,0.06);
-}
-
-/* ── Memories Section ──────────────────────────────────────────────────── */
-
-.cdx-memories-section {
-    padding-top: 2px;
-}
+/* ── Memories ──────────────────────────────────────────────────────────── */
 
 .cdx-mem-list {
-    max-height: 320px;
+    max-height: 240px;
     overflow-y: auto;
-}
-
-.cdx-mem-empty {
-    font-size: 11px;
-    font-style: italic;
-    padding: 8px 0;
 }
 
 .cdx-mem-item {
     display: flex;
     align-items: flex-start;
     gap: 6px;
-    padding: 7px 4px;
+    padding: 6px 2px;
     border-bottom: 1px solid rgba(255,255,255,0.03);
 }
 .cdx-mem-item:last-child { border-bottom: none; }
@@ -321,41 +187,46 @@
     border: none;
     color: #888;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 10px;
     padding: 2px;
     flex-shrink: 0;
-    min-width: 18px;
+    min-width: 16px;
     text-align: center;
-    margin-top: 1px;
+    margin-top: 2px;
 }
 .cdx-mem-weight-btn:hover { color: #ddd; }
 
 .cdx-mem-body {
     flex: 1;
     min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
 }
 
 .cdx-mem-text {
     font-size: 12px;
     line-height: 1.4;
-    color: #ccc;
+    color: #c0c0c0;
+    flex: 1;
 }
 
 .cdx-mem-type {
     font-size: 10px;
-    opacity: 0.6;
+    flex-shrink: 0;
+    margin-top: 2px;
 }
 
 .cdx-mem-actions {
     display: flex;
     gap: 0;
     flex-shrink: 0;
-    opacity: 0.3;
+    opacity: 0;
     transition: opacity 0.15s;
 }
-.cdx-mem-item:hover .cdx-mem-actions { opacity: 1; }
+.cdx-mem-item:hover .cdx-mem-actions { opacity: 0.7; }
 
-/* ── Memory Quick-Add ──────────────────────────────────────────────────── */
+/* ── Quick-Add ─────────────────────────────────────────────────────────── */
 
 .cdx-quick-add {
     padding: 10px 14px;
@@ -368,23 +239,22 @@
     justify-content: space-between;
     align-items: center;
     margin-top: 6px;
-    gap: 8px;
+    gap: 6px;
 }
 
 .cdx-qa-chips {
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
-    flex: 1;
 }
 
 .cdx-type-chip {
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.04);
-    color: #888;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    color: #777;
     cursor: pointer;
     font-size: 12px;
     display: inline-flex;
@@ -392,11 +262,10 @@
     justify-content: center;
     transition: all 0.12s;
 }
-.cdx-type-chip:hover { border-color: rgba(255,255,255,0.2); }
-
+.cdx-type-chip:hover { border-color: rgba(255,255,255,0.2); color: #aaa; }
 .cdx-type-active {
-    background: rgba(138,126,184,0.3);
-    border-color: rgba(138,126,184,0.5);
+    background: rgba(138,126,184,0.25);
+    border-color: rgba(138,126,184,0.4);
     color: #ddd;
 }
 
@@ -404,14 +273,6 @@
     display: flex;
     gap: 6px;
     align-items: center;
-}
-
-/* ── State Editor ──────────────────────────────────────────────────────── */
-
-.cdx-state-editor {
-    padding: 10px 14px;
-    max-height: calc(75vh - 56px);
-    overflow-y: auto;
 }
 
 /* ── Settings ──────────────────────────────────────────────────────────── */
@@ -430,11 +291,47 @@
     font-size: 12px;
     flex-wrap: wrap;
 }
-
 .cdx-setting-row input[type="range"] {
     flex: 1;
     min-width: 80px;
 }
+
+/* ── Behavioral Modes (in settings) ────────────────────────────────────── */
+
+.cdx-modes-list {
+    margin: 6px 0;
+}
+
+.cdx-mode-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.cdx-mode-activate {
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 0;
+    text-align: left;
+}
+.cdx-mode-activate:hover { color: #ddd; }
+
+.cdx-mode-active .cdx-mode-activate {
+    color: #c4bde0;
+    font-weight: 600;
+}
+
+.cdx-mode-item-actions {
+    display: flex;
+    gap: 0;
+    opacity: 0.4;
+}
+.cdx-mode-item:hover .cdx-mode-item-actions { opacity: 1; }
 
 /* ── Nudge ─────────────────────────────────────────────────────────────── */
 
