@@ -200,20 +200,23 @@ export const DEFAULT_SETTINGS = {
 };
 
 export const DEFAULT_CHAT_STATE = {
-    // Character
+    // Character — the three fields
+    whats_changed: '',             // Diff against the card — what's evolved
+    growing_toward: '',            // Direction of change — where the character is heading
     memories: [],
+    // Legacy / power-user
     relationship_summary: '',
     relationship_auto: true,
     active_state: null,
-    // Story (Phase 2 — fields present but unused in Phase 1)
+    // Story (Phase 2)
     threads: [],
     writing_directives: [
+        'Not every moment is plot-relevant. Characters have mundane needs and idle moments.',
         'Details mentioned in passing should not recur unless plot-relevant',
         'Scale dramatic weight proportionally to actual stakes',
-        'Advance active threads rather than introducing new ones',
     ],
     thread_history: [],
-    // Game mode (Phase 3 — fields present but unused)
+    // Game mode (Phase 3)
     game_mode: false,
     meters: { affinity: 50, tension: 15, standing: 30, wildcard: null },
     flags: {},

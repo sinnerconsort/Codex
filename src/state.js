@@ -54,6 +54,8 @@ export function sanitizeChatState() {
             }
         }
         if (!Array.isArray(state.memories)) state.memories = [];
+        if (typeof state.whats_changed !== 'string') state.whats_changed = '';
+        if (typeof state.growing_toward !== 'string') state.growing_toward = '';
         if (typeof state.relationship_summary !== 'string') state.relationship_summary = '';
         if (!Array.isArray(state.threads)) state.threads = [];
         if (!Array.isArray(state.writing_directives)) {
