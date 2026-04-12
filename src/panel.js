@@ -16,7 +16,6 @@ import {
 } from './config.js';
 
 let editingMemory = null;
-let editingState = null;
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
@@ -40,7 +39,7 @@ function createFAB() {
 
     const fab = $('<button>', {
         id: 'codex-fab',
-        title: 'Codex — Character & Story Engine',
+        title: 'Codex',
         html: '<i class="fa-solid fa-id-badge" style="pointer-events:none;"></i>',
     }).css({
         position: 'fixed',
@@ -60,7 +59,7 @@ function createFAB() {
         cursor: 'pointer',
         zIndex: '31000',
         boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
-        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+        transition: 'transform 0.15s ease',
     });
 
     fab.on('click', togglePanel);
@@ -72,7 +71,7 @@ function togglePanel() {
     if ($panel.is(':visible')) {
         $panel.fadeOut(150);
     } else {
-        renderActiveTab();
+        renderPanel();
         $panel.fadeIn(150);
     }
 }
@@ -82,162 +81,113 @@ function togglePanel() {
 function createPanel() {
     if ($('#codex-panel').length) return;
 
-    const typeOptions = Object.entries(MEMORY_TYPE_META).map(([k, v]) =>
-        `<option value="${k}">${v.icon} ${v.label}</option>`
-    ).join('');
-
-    const weightOptions = Object.entries(MEMORY_WEIGHT_META).map(([k, v]) =>
-        `<option value="${k}">${v.icon} ${v.label}</option>`
-    ).join('');
-
-    const templateOptions = Object.entries(STATE_TEMPLATES).map(([k, v]) =>
-        `<option value="${k}">${v.name}</option>`
-    ).join('');
-
     const panel = $(`
     <div id="codex-panel" class="codex-panel" style="display:none;">
-      <div class="codex-header">
-        <span class="codex-title">📋 ${EXT_DISPLAY_NAME}</span>
-        <button class="codex-close" id="codex-close">✕</button>
+
+      <!-- Header -->
+      <div class="cdx-header">
+        <span class="cdx-char-name" id="cdx-char-name"></span>
+        <div class="cdx-header-actions">
+          <button class="cdx-icon-btn" id="cdx-settings-toggle" title="Settings">⚙️</button>
+          <button class="cdx-icon-btn" id="cdx-close" title="Close">✕</button>
+        </div>
       </div>
 
-      <div class="codex-tabs">
-        <button class="codex-tab codex-tab-active" data-tab="character">Character</button>
-        <button class="codex-tab" data-tab="story">Story</button>
-        <button class="codex-tab" data-tab="settings">Settings</button>
-      </div>
+      <!-- Main View (profile page) -->
+      <div class="cdx-main" id="cdx-main">
 
-      <!-- ── CHARACTER TAB ── -->
-      <div class="codex-pane" id="codex-pane-character">
+        <!-- Mood Chips -->
+        <div class="cdx-mood-section" id="cdx-mood-section"></div>
 
-        <!-- State Selector -->
-        <div class="codex-section">
-          <div class="codex-section-header">
-            <span>Behavioral State</span>
-            <select id="codex-state-select" class="codex-select"></select>
-          </div>
-          <div id="codex-state-display" class="codex-state-display"></div>
-          <div class="codex-btn-row">
-            <button class="codex-btn codex-btn-sm" id="codex-add-state">+ New State</button>
-            <button class="codex-btn codex-btn-sm" id="codex-edit-state">Edit</button>
-            <button class="codex-btn codex-btn-sm codex-btn-danger" id="codex-delete-state">Delete</button>
-            <select id="codex-template-select" class="codex-select codex-select-sm">
-              <option value="">Load template…</option>
-              ${templateOptions}
-            </select>
-          </div>
-        </div>
-
-        <!-- State Editor (hidden by default) -->
-        <div id="codex-state-editor" class="codex-section" style="display:none;">
-          <div class="codex-section-header"><span id="codex-state-editor-title">New State</span></div>
-          <label>Name</label>
-          <input type="text" id="codex-se-name" placeholder="e.g. Relaxed, Hunting, Public Persona…" />
-          <label>EXPRESS <span class="codex-hint">(what traits ARE active now)</span></label>
-          <textarea id="codex-se-express" rows="3" placeholder="Warm, genuine humor, makes eye contact…"></textarea>
-          <label>SUPPRESS <span class="codex-hint">(what the AI should NOT assume)</span></label>
-          <textarea id="codex-se-suppress" rows="3" placeholder="Do NOT write calculating behavior. Do NOT imply hidden motives…"></textarea>
-          <label class="codex-check"><input type="checkbox" id="codex-se-default" /> Set as default state</label>
-          <div class="codex-btn-row">
-            <button class="codex-btn codex-btn-primary" id="codex-se-save">Save State</button>
-            <button class="codex-btn" id="codex-se-cancel">Cancel</button>
-          </div>
-        </div>
-
-        <!-- Relationship Summary -->
-        <div class="codex-section">
-          <div class="codex-section-header">
-            <span>Relationship</span>
-            <div class="codex-btn-row-inline">
-              <button class="codex-btn codex-btn-sm" id="codex-rel-edit" title="Edit">✏️</button>
-              <button class="codex-btn codex-btn-sm" id="codex-rel-regen" title="Regenerate from memories">🔄</button>
-            </div>
-          </div>
-          <div id="codex-rel-display" class="codex-rel-display"></div>
-          <div id="codex-rel-editor" style="display:none;">
-            <textarea id="codex-rel-text" rows="3"></textarea>
-            <div class="codex-btn-row">
-              <button class="codex-btn codex-btn-primary codex-btn-sm" id="codex-rel-save">Save</button>
-              <button class="codex-btn codex-btn-sm" id="codex-rel-cancel">Cancel</button>
-            </div>
-          </div>
-        </div>
+        <!-- Relationship -->
+        <div class="cdx-relationship" id="cdx-relationship"></div>
 
         <!-- Memories -->
-        <div class="codex-section">
-          <div class="codex-section-header">
-            <span>Memories <span id="codex-mem-count" class="codex-count"></span></span>
-            <button class="codex-btn codex-btn-sm" id="codex-add-memory">+ Add</button>
+        <div class="cdx-memories-section">
+          <div class="cdx-section-bar">
+            <span class="cdx-section-label">Memories <span id="cdx-mem-count" class="cdx-dim"></span></span>
+            <button class="cdx-text-btn" id="cdx-add-memory">+ add</button>
           </div>
-          <div id="codex-mem-list" class="codex-mem-list"></div>
-        </div>
-
-        <!-- Memory Editor (hidden by default) -->
-        <div id="codex-mem-editor" class="codex-section" style="display:none;">
-          <div class="codex-section-header"><span id="codex-mem-editor-title">Add Memory</span></div>
-          <label>What happened?</label>
-          <textarea id="codex-me-text" rows="2" placeholder="e.g. Danny admitted he doesn't sleep well…"></textarea>
-          <div class="codex-inline-row">
-            <div>
-              <label>Type</label>
-              <select id="codex-me-type">${typeOptions}</select>
-            </div>
-            <div>
-              <label>Weight</label>
-              <select id="codex-me-weight">${weightOptions}</select>
-            </div>
-          </div>
-          <div class="codex-btn-row">
-            <button class="codex-btn codex-btn-primary" id="codex-me-save">Save Memory</button>
-            <button class="codex-btn" id="codex-me-cancel">Cancel</button>
-          </div>
+          <div id="cdx-mem-list" class="cdx-mem-list"></div>
         </div>
 
       </div>
 
-      <!-- ── STORY TAB (Phase 2 placeholder) ── -->
-      <div class="codex-pane" id="codex-pane-story" style="display:none;">
-        <div class="codex-placeholder">
-          <p>📖 Story tracking coming in Phase 2</p>
-          <p class="codex-hint">Thread management, writing directives, and plot pacing.</p>
+      <!-- Memory Quick-Add (slides up when adding) -->
+      <div class="cdx-quick-add" id="cdx-quick-add" style="display:none;">
+        <textarea id="cdx-qa-text" rows="2" placeholder="What happened?"></textarea>
+        <div class="cdx-qa-row">
+          <div class="cdx-qa-chips" id="cdx-qa-type-chips"></div>
+          <div class="cdx-qa-actions">
+            <select id="cdx-qa-weight" class="cdx-mini-select">
+              ${Object.entries(MEMORY_WEIGHT_META).map(([k, v]) =>
+                `<option value="${k}">${v.icon} ${v.label}</option>`
+              ).join('')}
+            </select>
+            <button class="cdx-btn-save" id="cdx-qa-save">Save</button>
+            <button class="cdx-icon-btn" id="cdx-qa-cancel">✕</button>
+          </div>
         </div>
       </div>
 
-      <!-- ── SETTINGS TAB ── -->
-      <div class="codex-pane" id="codex-pane-settings" style="display:none;">
-        <div class="codex-section">
-          <label class="codex-check">
-            <input type="checkbox" id="codex-s-enabled" />
-            <b>Enable Codex</b>
-          </label>
+      <!-- State Customizer (hidden, shown via gear on mood chip) -->
+      <div class="cdx-state-editor" id="cdx-state-editor" style="display:none;">
+        <div class="cdx-section-bar">
+          <span class="cdx-section-label" id="cdx-se-title">Edit Mood</span>
+          <button class="cdx-icon-btn" id="cdx-se-close">✕</button>
         </div>
-        <div class="codex-section">
-          <label class="codex-check">
-            <input type="checkbox" id="codex-s-nudge" />
-            <b>Memory nudge notifications</b>
-          </label>
-          <div class="codex-hint">Shows a prompt when notable moments are detected in AI responses.</div>
+        <input type="text" id="cdx-se-name" placeholder="Name (e.g. Relaxed)" class="cdx-input" />
+        <textarea id="cdx-se-express" rows="2" placeholder="How they act in this mood…" class="cdx-input"></textarea>
+        <textarea id="cdx-se-suppress" rows="2" placeholder="What the AI should NOT assume…" class="cdx-input"></textarea>
+        <div class="cdx-qa-actions">
+          <label class="cdx-check-sm"><input type="checkbox" id="cdx-se-default" /> Default</label>
+          <button class="cdx-btn-save" id="cdx-se-save">Save</button>
+          <button class="cdx-text-btn cdx-danger" id="cdx-se-delete" style="display:none;">Delete</button>
         </div>
-        <div class="codex-section">
-          <label class="codex-check">
-            <input type="checkbox" id="codex-s-autorel" />
-            Auto-regenerate relationship summary
-          </label>
-          <div class="codex-hint">Updates the summary when memories change. Disable to keep manual edits.</div>
+      </div>
+
+      <!-- Relationship Editor (slides up when editing) -->
+      <div class="cdx-rel-editor" id="cdx-rel-editor" style="display:none;">
+        <textarea id="cdx-rel-text" rows="3" class="cdx-input" placeholder="Describe the relationship…"></textarea>
+        <div class="cdx-qa-actions">
+          <button class="cdx-btn-save" id="cdx-rel-save">Save</button>
+          <button class="cdx-icon-btn" id="cdx-rel-cancel">✕</button>
         </div>
-        <div class="codex-section">
-          <div class="codex-setting-label"><b>Max memories in injection</b> <span id="codex-maxmem-val">5</span></div>
-          <input type="range" id="codex-s-maxmem" min="1" max="10" value="5" />
+      </div>
+
+      <!-- Settings Panel (slides over main) -->
+      <div class="cdx-settings" id="cdx-settings" style="display:none;">
+        <div class="cdx-section-bar">
+          <span class="cdx-section-label">Settings</span>
+          <button class="cdx-icon-btn" id="cdx-settings-close">✕</button>
         </div>
-        <div class="codex-section">
-          <div class="codex-setting-label"><b>Injection depth</b> <span id="codex-depth-val">2</span>
-            <span class="codex-hint">(higher = earlier in context)</span>
-          </div>
-          <input type="range" id="codex-s-depth" min="0" max="6" value="2" />
+
+        <label class="cdx-check-sm"><input type="checkbox" id="cdx-s-enabled" /> Enable Codex</label>
+        <label class="cdx-check-sm"><input type="checkbox" id="cdx-s-nudge" /> Memory nudge notifications</label>
+        <label class="cdx-check-sm"><input type="checkbox" id="cdx-s-autorel" /> Auto-update relationship summary</label>
+
+        <div class="cdx-setting-row">
+          <span>Memories in prompt</span>
+          <span id="cdx-maxmem-val">5</span>
+          <input type="range" id="cdx-s-maxmem" min="1" max="10" value="5" />
         </div>
-        <div class="codex-section">
-          <button class="codex-btn codex-btn-danger" id="codex-clear-memories">Clear All Memories</button>
+        <div class="cdx-setting-row">
+          <span>Injection depth</span>
+          <span id="cdx-depth-val">2</span>
+          <input type="range" id="cdx-s-depth" min="0" max="6" value="2" />
         </div>
+
+        <div class="cdx-setting-row" style="margin-top:12px;">
+          <span>Quick Setup</span>
+          <select id="cdx-template-select" class="cdx-mini-select">
+            <option value="">Load mood template…</option>
+            ${Object.entries(STATE_TEMPLATES).map(([k, v]) =>
+              `<option value="${k}">${v.name}</option>`
+            ).join('')}
+          </select>
+        </div>
+
+        <button class="cdx-text-btn cdx-danger" id="cdx-clear-memories" style="margin-top:16px;">Clear all memories</button>
       </div>
 
     </div>
@@ -247,7 +197,7 @@ function createPanel() {
         position: 'fixed',
         bottom: '60px',
         right: '15px',
-        width: '340px',
+        width: 'min(340px, calc(100vw - 30px))',
         maxHeight: '75vh',
         borderRadius: '12px',
         border: '1px solid rgba(255,255,255,0.1)',
@@ -267,99 +217,97 @@ function createPanel() {
 // ─── Event Binding ───────────────────────────────────────────────────────────
 
 function bindEvents() {
-    // Panel close
-    $(document).on('click', '#codex-close', () => $('#codex-panel').fadeOut(150));
+    $(document).on('click', '#cdx-close', () => $('#codex-panel').fadeOut(150));
 
-    // Tabs
-    $(document).on('click', '.codex-tab', function () {
-        const tab = $(this).data('tab');
-        $('.codex-tab').removeClass('codex-tab-active');
-        $(this).addClass('codex-tab-active');
-        $('.codex-pane').hide();
-        $(`#codex-pane-${tab}`).show();
-        renderActiveTab();
-    });
-
-    // ── State events ─────────────────────────────────────────────────────
-    $(document).on('change', '#codex-state-select', function () {
-        const stateId = $(this).val();
-        if (stateId) {
-            setActiveState(stateId);
-            renderStateDisplay();
-            buildAndInject();
+    // Settings toggle
+    $(document).on('click', '#cdx-settings-toggle', () => {
+        const vis = $('#cdx-settings').is(':visible');
+        if (vis) {
+            $('#cdx-settings').slideUp(150);
+            $('#cdx-main').slideDown(150);
+        } else {
+            renderSettings();
+            $('#cdx-main').slideUp(150);
+            $('#cdx-settings').slideDown(150);
         }
     });
-
-    $(document).on('click', '#codex-add-state', () => openStateEditor(null));
-    $(document).on('click', '#codex-edit-state', () => {
-        const active = getActiveState();
-        if (active) openStateEditor(active);
-        else toastr.info('No state selected to edit');
-    });
-    $(document).on('click', '#codex-delete-state', () => {
-        const active = getActiveState();
-        if (!active) return;
-        if (!confirm(`Delete state "${active.name}"?`)) return;
-        deleteState(active.id);
-        renderStateSection();
-        buildAndInject();
-        toastr.info('State deleted');
+    $(document).on('click', '#cdx-settings-close', () => {
+        $('#cdx-settings').slideUp(150);
+        $('#cdx-main').slideDown(150);
     });
 
-    $(document).on('click', '#codex-se-save', saveStateFromEditor);
-    $(document).on('click', '#codex-se-cancel', closeStateEditor);
-
-    $(document).on('change', '#codex-template-select', function () {
-        const key = $(this).val();
-        if (!key) return;
-        if (!confirm(`Load "${STATE_TEMPLATES[key]?.name}" template? This replaces existing states.`)) {
-            $(this).val('');
+    // ── Mood chips ───────────────────────────────────────────────────────
+    $(document).on('click', '.cdx-mood-chip', function () {
+        const stateId = $(this).data('id');
+        if (stateId === 'add_new') {
+            openStateEditor(null);
             return;
         }
-        loadTemplate(key);
-        $(this).val('');
-        renderStateSection();
+        setActiveState(stateId);
+        renderMoods();
         buildAndInject();
-        toastr.success('Template loaded');
     });
 
-    // ── Relationship events ──────────────────────────────────────────────
-    $(document).on('click', '#codex-rel-edit', () => {
-        $('#codex-rel-display').hide();
-        $('#codex-rel-editor').show();
-        $('#codex-rel-text').val(getRelationshipSummary());
+    // Long-press / edit gear on mood chip
+    $(document).on('click', '.cdx-mood-edit', function (e) {
+        e.stopPropagation();
+        const stateId = $(this).closest('.cdx-mood-chip').data('id');
+        const states = getStates();
+        const state = states.find(s => s.id === stateId);
+        if (state) openStateEditor(state);
     });
-    $(document).on('click', '#codex-rel-save', () => {
-        setRelationshipSummary($('#codex-rel-text').val());
-        $('#codex-rel-editor').hide();
-        $('#codex-rel-display').show();
-        renderRelationship();
+
+    // State editor
+    $(document).on('click', '#cdx-se-save', saveStateFromEditor);
+    $(document).on('click', '#cdx-se-close', closeStateEditor);
+    $(document).on('click', '#cdx-se-delete', () => {
+        const id = $('#cdx-state-editor').data('editing-id');
+        if (!id) return;
+        if (!confirm('Delete this mood?')) return;
+        deleteState(id);
+        closeStateEditor();
+        renderMoods();
         buildAndInject();
     });
-    $(document).on('click', '#codex-rel-cancel', () => {
-        $('#codex-rel-editor').hide();
-        $('#codex-rel-display').show();
+
+    // ── Relationship ─────────────────────────────────────────────────────
+    $(document).on('click', '#cdx-rel-edit-btn', () => {
+        $('#cdx-rel-text').val(getRelationshipSummary());
+        $('#cdx-rel-editor').slideDown(150);
     });
-    $(document).on('click', '#codex-rel-regen', () => {
+    $(document).on('click', '#cdx-rel-regen-btn', () => {
         regenerateSummary();
         renderRelationship();
         buildAndInject();
-        toastr.success('Summary regenerated');
+    });
+    $(document).on('click', '#cdx-rel-save', () => {
+        setRelationshipSummary($('#cdx-rel-text').val());
+        $('#cdx-rel-editor').slideUp(150);
+        renderRelationship();
+        buildAndInject();
+    });
+    $(document).on('click', '#cdx-rel-cancel', () => {
+        $('#cdx-rel-editor').slideUp(150);
     });
 
-    // ── Memory events ────────────────────────────────────────────────────
-    $(document).on('click', '#codex-add-memory', () => openMemoryEditor(null));
-    $(document).on('click', '#codex-me-save', saveMemoryFromEditor);
-    $(document).on('click', '#codex-me-cancel', closeMemoryEditor);
+    // ── Memory quick-add ─────────────────────────────────────────────────
+    $(document).on('click', '#cdx-add-memory', () => openQuickAdd(null));
+    $(document).on('click', '#cdx-qa-save', saveFromQuickAdd);
+    $(document).on('click', '#cdx-qa-cancel', closeQuickAdd);
 
-    $(document).on('click', '.codex-mem-edit', function () {
+    // Type chips in quick-add
+    $(document).on('click', '.cdx-type-chip', function () {
+        $('.cdx-type-chip').removeClass('cdx-type-active');
+        $(this).addClass('cdx-type-active');
+    });
+
+    // Memory inline actions
+    $(document).on('click', '.cdx-mem-edit', function () {
         const id = $(this).data('id');
-        const memories = getMemories();
-        const mem = memories.find(m => m.id === id);
-        if (mem) openMemoryEditor(mem);
+        const mem = getMemories().find(m => m.id === id);
+        if (mem) openQuickAdd(mem);
     });
-
-    $(document).on('click', '.codex-mem-delete', function () {
+    $(document).on('click', '.cdx-mem-delete', function () {
         const id = $(this).data('id');
         if (!confirm('Delete this memory?')) return;
         deleteMemory(id);
@@ -368,43 +316,61 @@ function bindEvents() {
         renderRelationship();
         buildAndInject();
     });
+    // Memory weight cycle on tap
+    $(document).on('click', '.cdx-mem-weight-btn', function () {
+        const id = $(this).data('id');
+        const mem = getMemories().find(m => m.id === id);
+        if (!mem) return;
+        const cycle = { minor: 'normal', normal: 'significant', significant: 'minor' };
+        updateMemory(id, { weight: cycle[mem.weight] || 'normal' });
+        renderMemories();
+        buildAndInject();
+    });
 
-    // ── Settings events ──────────────────────────────────────────────────
-    $(document).on('change', '#codex-s-enabled', function () {
+    // ── Settings ─────────────────────────────────────────────────────────
+    $(document).on('change', '#cdx-s-enabled', function () {
         getSettings().enabled = this.checked;
         saveSettings();
         if (this.checked) buildAndInject();
     });
-    $(document).on('change', '#codex-s-nudge', function () {
+    $(document).on('change', '#cdx-s-nudge', function () {
         getSettings().enableNudge = this.checked;
         saveSettings();
     });
-    $(document).on('change', '#codex-s-autorel', function () {
-        const state = getChatState();
-        state.relationship_auto = this.checked;
+    $(document).on('change', '#cdx-s-autorel', function () {
+        getChatState().relationship_auto = this.checked;
         saveChatData();
-        if (this.checked) {
-            regenerateSummary();
-            renderRelationship();
-            buildAndInject();
-        }
+        if (this.checked) { regenerateSummary(); renderRelationship(); buildAndInject(); }
     });
-    $(document).on('input', '#codex-s-maxmem', function () {
+    $(document).on('input', '#cdx-s-maxmem', function () {
         const v = parseInt(this.value);
         getSettings().maxMemoriesInject = v;
-        $('#codex-maxmem-val').text(v);
+        $('#cdx-maxmem-val').text(v);
         saveSettings();
         buildAndInject();
     });
-    $(document).on('input', '#codex-s-depth', function () {
+    $(document).on('input', '#cdx-s-depth', function () {
         const v = parseInt(this.value);
         getSettings().injectionDepth = v;
-        $('#codex-depth-val').text(v);
+        $('#cdx-depth-val').text(v);
         saveSettings();
         buildAndInject();
     });
-    $(document).on('click', '#codex-clear-memories', () => {
-        if (!confirm('Clear ALL memories for this chat? This cannot be undone.')) return;
+    $(document).on('change', '#cdx-template-select', function () {
+        const key = $(this).val();
+        if (!key) return;
+        if (!confirm(`Load "${STATE_TEMPLATES[key]?.name}" moods? This replaces existing moods.`)) {
+            $(this).val('');
+            return;
+        }
+        loadTemplate(key);
+        $(this).val('');
+        renderMoods();
+        buildAndInject();
+        toastr.success('Moods loaded');
+    });
+    $(document).on('click', '#cdx-clear-memories', () => {
+        if (!confirm('Clear ALL memories? Cannot be undone.')) return;
         const state = getChatState();
         state.memories = [];
         state.relationship_summary = '';
@@ -412,182 +378,235 @@ function bindEvents() {
         renderMemories();
         renderRelationship();
         buildAndInject();
-        toastr.info('All memories cleared');
     });
 }
 
-// ─── Tab Rendering ───────────────────────────────────────────────────────────
+// ─── Render All ──────────────────────────────────────────────────────────────
 
-function renderActiveTab() {
-    const active = $('.codex-tab-active').data('tab');
-    if (active === 'character') renderCharacterTab();
-    else if (active === 'settings') renderSettingsTab();
-}
+function renderPanel() {
+    const ctx = getContext();
+    const charName = ctx?.name2 || 'Character';
+    const memories = getMemories();
+    const states = getStates();
 
-function renderCharacterTab() {
-    renderStateSection();
+    $('#cdx-char-name').text(charName);
+
+    // Show welcome state if completely empty
+    if (!states.length && !memories.length) {
+        renderWelcome(charName);
+        return;
+    }
+
+    renderMoods();
     renderRelationship();
     renderMemories();
 }
 
-// ─── State Rendering ─────────────────────────────────────────────────────────
+function renderWelcome(charName) {
+    $('#cdx-mood-section').html(`
+        <div class="cdx-welcome">
+            <div class="cdx-welcome-text">Ready to learn about <b>${xss(charName)}</b></div>
+            <div class="cdx-welcome-hint">Memories build naturally as you chat. Set up moods to control how they act.</div>
+            <div class="cdx-welcome-actions">
+                ${Object.entries(STATE_TEMPLATES).map(([k, v]) =>
+                    `<button class="cdx-welcome-btn" data-template="${k}">${v.name}</button>`
+                ).join('')}
+            </div>
+        </div>
+    `);
 
-function renderStateSection() {
-    const states = getStates();
-    const active = getActiveState();
-    const $select = $('#codex-state-select').empty();
+    // Bind welcome template buttons
+    $('.cdx-welcome-btn').off('click').on('click', function () {
+        const key = $(this).data('template');
+        loadTemplate(key);
+        renderPanel();
+        buildAndInject();
+        toastr.success('Moods loaded — tap to switch');
+    });
 
-    if (!states.length) {
-        $select.append('<option value="">(no states defined)</option>');
-        $('#codex-state-display').html('<div class="codex-hint">Define behavioral states to control how the character acts. Use a template to get started.</div>');
-        return;
-    }
-
-    for (const s of states) {
-        const selected = active && s.id === active.id ? 'selected' : '';
-        $select.append(`<option value="${s.id}" ${selected}>${s.name}${s.is_default ? ' (default)' : ''}</option>`);
-    }
-
-    renderStateDisplay();
+    renderRelationship();
+    renderMemories();
 }
 
-function renderStateDisplay() {
+// ─── Mood Chips ──────────────────────────────────────────────────────────────
+
+function renderMoods() {
+    const states = getStates();
     const active = getActiveState();
-    if (!active) {
-        $('#codex-state-display').html('<div class="codex-hint">No state selected.</div>');
+
+    if (!states.length) {
+        $('#cdx-mood-section').html(`
+            <div class="cdx-mood-empty">
+                <button class="cdx-text-btn" id="cdx-mood-setup">Set up moods</button>
+            </div>
+        `);
+        $(document).off('click', '#cdx-mood-setup').on('click', '#cdx-mood-setup', () => {
+            openStateEditor(null);
+        });
         return;
     }
 
-    const html = `
-        <div class="codex-state-block">
-            ${active.express ? `<div class="codex-state-line"><span class="codex-state-tag codex-express-tag">EXPRESS</span> ${xss(active.express)}</div>` : ''}
-            ${active.suppress ? `<div class="codex-state-line"><span class="codex-state-tag codex-suppress-tag">SUPPRESS</span> ${xss(active.suppress)}</div>` : ''}
-        </div>
-    `;
-    $('#codex-state-display').html(html);
+    const chips = states.map(s => {
+        const isActive = active && s.id === active.id;
+        return `
+            <div class="cdx-mood-chip ${isActive ? 'cdx-mood-active' : ''}" data-id="${s.id}">
+                <span class="cdx-mood-label">${xss(s.name)}</span>
+                <span class="cdx-mood-edit" title="Edit">✎</span>
+            </div>
+        `;
+    }).join('');
+
+    const addChip = `<div class="cdx-mood-chip cdx-mood-add" data-id="add_new">+</div>`;
+
+    $('#cdx-mood-section').html(`<div class="cdx-mood-row">${chips}${addChip}</div>`);
+
+    // Show active state's directives as a subtle preview
+    if (active) {
+        const preview = active.express
+            ? active.express.substring(0, 80) + (active.express.length > 80 ? '…' : '')
+            : '';
+        if (preview) {
+            $('#cdx-mood-section').append(`<div class="cdx-mood-preview">${xss(preview)}</div>`);
+        }
+    }
 }
 
 // ─── State Editor ────────────────────────────────────────────────────────────
 
 function openStateEditor(state) {
-    editingState = state;
-    $('#codex-state-editor-title').text(state ? `Edit: ${state.name}` : 'New State');
-    $('#codex-se-name').val(state?.name || '');
-    $('#codex-se-express').val(state?.express || '');
-    $('#codex-se-suppress').val(state?.suppress || '');
-    $('#codex-se-default').prop('checked', state?.is_default || false);
-    $('#codex-state-editor').slideDown(150);
+    $('#cdx-se-title').text(state ? `Edit: ${state.name}` : 'New Mood');
+    $('#cdx-se-name').val(state?.name || '');
+    $('#cdx-se-express').val(state?.express || '');
+    $('#cdx-se-suppress').val(state?.suppress || '');
+    $('#cdx-se-default').prop('checked', state?.is_default || false);
+    $('#cdx-se-delete').toggle(!!state);
+    $('#cdx-state-editor').data('editing-id', state?.id || null);
+    $('#cdx-main').slideUp(150);
+    $('#cdx-state-editor').slideDown(150);
 }
 
 function closeStateEditor() {
-    editingState = null;
-    $('#codex-state-editor').slideUp(150);
+    $('#cdx-state-editor').slideUp(150);
+    $('#cdx-main').slideDown(150);
 }
 
 function saveStateFromEditor() {
-    const name = $('#codex-se-name').val().trim();
-    const express = $('#codex-se-express').val().trim();
-    const suppress = $('#codex-se-suppress').val().trim();
-    const isDefault = $('#codex-se-default').prop('checked');
+    const name = $('#cdx-se-name').val().trim();
+    const express = $('#cdx-se-express').val().trim();
+    const suppress = $('#cdx-se-suppress').val().trim();
+    const isDefault = $('#cdx-se-default').prop('checked');
+    const editingId = $('#cdx-state-editor').data('editing-id');
 
-    if (!name) { toastr.warning('State needs a name'); return; }
-    if (!express && !suppress) { toastr.warning('Add at least an EXPRESS or SUPPRESS directive'); return; }
+    if (!name) { toastr.warning('Give it a name'); return; }
 
-    if (editingState) {
-        updateState(editingState.id, { name, express, suppress, is_default: isDefault });
+    if (editingId) {
+        updateState(editingId, { name, express, suppress, is_default: isDefault });
     } else {
         const newState = addState(name, express, suppress, isDefault);
-        if (newState && isDefault) setActiveState(newState.id);
+        if (newState) setActiveState(newState.id);
     }
 
     closeStateEditor();
-    renderStateSection();
+    renderMoods();
     buildAndInject();
-    toastr.success(`State "${name}" saved`);
 }
 
-// ─── Relationship Rendering ──────────────────────────────────────────────────
+// ─── Relationship ────────────────────────────────────────────────────────────
 
 function renderRelationship() {
     const summary = getRelationshipSummary();
-    if (summary) {
-        $('#codex-rel-display').html(`<div class="codex-rel-text">${xss(summary)}</div>`);
-    } else {
-        $('#codex-rel-display').html('<div class="codex-hint">No relationship data yet. Add memories to build a relationship summary.</div>');
-    }
-}
-
-// ─── Memory Rendering ────────────────────────────────────────────────────────
-
-function renderMemories() {
     const memories = getMemories();
-    const $list = $('#codex-mem-list');
-    const $count = $('#codex-mem-count');
 
-    $count.text(`(${memories.length}/30)`);
-
-    if (!memories.length) {
-        $list.html('<div class="codex-hint">No memories yet. Click + Add or wait for a nudge during roleplay.</div>');
+    if (!summary && !memories.length) {
+        $('#cdx-relationship').html(`
+            <div class="cdx-rel-empty cdx-dim">Memories will shape how ${xss(getContext()?.name2 || 'they')} see you.</div>
+        `);
         return;
     }
 
-    // Sort: significant first, then normal, then minor. Within each, newest first.
+    const displayText = summary || 'No relationship summary yet.';
+
+    $('#cdx-relationship').html(`
+        <div class="cdx-rel-block">
+            <div class="cdx-rel-text">${xss(displayText)}</div>
+            <div class="cdx-rel-actions">
+                <button class="cdx-icon-btn cdx-dim" id="cdx-rel-edit-btn" title="Edit">✏️</button>
+                <button class="cdx-icon-btn cdx-dim" id="cdx-rel-regen-btn" title="Regenerate">🔄</button>
+            </div>
+        </div>
+    `);
+}
+
+// ─── Memories ────────────────────────────────────────────────────────────────
+
+function renderMemories() {
+    const memories = getMemories();
+    $('#cdx-mem-count').text(`(${memories.length}/30)`);
+
+    if (!memories.length) {
+        $('#cdx-mem-list').html(`<div class="cdx-dim cdx-mem-empty">Memories appear here as you chat, or add them manually.</div>`);
+        return;
+    }
+
+    // Sort: significant → normal → minor, newest first within each
     const sorted = [...memories].sort((a, b) => {
         const pw = { significant: 2, normal: 1, minor: 0 };
         const diff = (pw[b.weight] || 1) - (pw[a.weight] || 1);
         if (diff !== 0) return diff;
-        const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-        const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return tb - ta;
+        return (new Date(b.timestamp || 0)) - (new Date(a.timestamp || 0));
     });
 
     const html = sorted.map(m => {
-        const typeMeta = MEMORY_TYPE_META[m.type] || { icon: '●', label: m.type };
-        const weightMeta = MEMORY_WEIGHT_META[m.weight] || { icon: '●' };
+        const wm = MEMORY_WEIGHT_META[m.weight] || MEMORY_WEIGHT_META.normal;
+        const tm = MEMORY_TYPE_META[m.type] || MEMORY_TYPE_META.trust;
 
         return `
-        <div class="codex-mem-item">
-            <div class="codex-mem-top">
-                <span class="codex-mem-weight">${weightMeta.icon}</span>
-                <span class="codex-mem-text">${xss(m.text)}</span>
+        <div class="cdx-mem-item">
+            <button class="cdx-mem-weight-btn" data-id="${m.id}" title="Tap to cycle weight">${wm.icon}</button>
+            <div class="cdx-mem-body">
+                <div class="cdx-mem-text">${xss(m.text)}</div>
+                <span class="cdx-mem-type" style="color:${tm.color}">${tm.icon} ${tm.label}</span>
             </div>
-            <div class="codex-mem-meta">
-                <span class="codex-badge" style="border-color:${typeMeta.color}">${typeMeta.icon} ${typeMeta.label}</span>
-                <span class="codex-mem-actions">
-                    <button class="codex-icon-btn codex-mem-edit" data-id="${m.id}" title="Edit">✏️</button>
-                    <button class="codex-icon-btn codex-mem-delete" data-id="${m.id}" title="Delete">🗑️</button>
-                </span>
+            <div class="cdx-mem-actions">
+                <button class="cdx-icon-btn cdx-mem-edit" data-id="${m.id}">✎</button>
+                <button class="cdx-icon-btn cdx-mem-delete" data-id="${m.id}">🗑</button>
             </div>
         </div>`;
     }).join('');
 
-    $list.html(html);
+    $('#cdx-mem-list').html(html);
 }
 
-// ─── Memory Editor ───────────────────────────────────────────────────────────
+// ─── Memory Quick-Add ────────────────────────────────────────────────────────
 
-function openMemoryEditor(memory) {
+function openQuickAdd(memory) {
     editingMemory = memory;
-    $('#codex-mem-editor-title').text(memory ? 'Edit Memory' : 'Add Memory');
-    $('#codex-me-text').val(memory?.text || '');
-    $('#codex-me-type').val(memory?.type || 'trust');
-    $('#codex-me-weight').val(memory?.weight || 'normal');
-    $('#codex-mem-editor').slideDown(150);
+
+    // Build type chips
+    const typeChips = Object.entries(MEMORY_TYPE_META).map(([k, v]) => {
+        const active = (memory?.type || 'trust') === k ? 'cdx-type-active' : '';
+        return `<button class="cdx-type-chip ${active}" data-type="${k}" title="${v.label}">${v.icon}</button>`;
+    }).join('');
+
+    $('#cdx-qa-type-chips').html(typeChips);
+    $('#cdx-qa-text').val(memory?.text || '');
+    $('#cdx-qa-weight').val(memory?.weight || 'normal');
+    $('#cdx-quick-add').slideDown(150);
+    $('#cdx-qa-text').focus();
 }
 
-function closeMemoryEditor() {
+function closeQuickAdd() {
     editingMemory = null;
-    $('#codex-mem-editor').slideUp(150);
-    $('#codex-me-text').val('');
+    $('#cdx-quick-add').slideUp(150);
+    $('#cdx-qa-text').val('');
 }
 
-function saveMemoryFromEditor() {
-    const text = $('#codex-me-text').val().trim();
-    const type = $('#codex-me-type').val();
-    const weight = $('#codex-me-weight').val();
+function saveFromQuickAdd() {
+    const text = $('#cdx-qa-text').val().trim();
+    if (!text) { toastr.warning('Write something to remember'); return; }
 
-    if (!text) { toastr.warning('Memory needs text'); return; }
-
+    const type = $('.cdx-type-chip.cdx-type-active').data('type') || 'trust';
+    const weight = $('#cdx-qa-weight').val() || 'normal';
     const ctx = getContext();
     const msgIdx = ctx?.chat?.length || 0;
 
@@ -597,44 +616,38 @@ function saveMemoryFromEditor() {
         addMemory(text, type, weight, msgIdx);
     }
 
-    closeMemoryEditor();
+    closeQuickAdd();
     maybeRegenerateSummary();
     renderMemories();
     renderRelationship();
     buildAndInject();
-    toastr.success('Memory saved');
 }
 
-// ─── Settings Rendering ──────────────────────────────────────────────────────
+// ─── Settings ────────────────────────────────────────────────────────────────
 
-function renderSettingsTab() {
+function renderSettings() {
     const settings = getSettings();
     const chatState = getChatState();
-    $('#codex-s-enabled').prop('checked', settings.enabled);
-    $('#codex-s-nudge').prop('checked', settings.enableNudge !== false);
-    $('#codex-s-autorel').prop('checked', chatState.relationship_auto !== false);
-    $('#codex-s-maxmem').val(settings.maxMemoriesInject || 5);
-    $('#codex-maxmem-val').text(settings.maxMemoriesInject || 5);
-    $('#codex-s-depth').val(settings.injectionDepth || 2);
-    $('#codex-depth-val').text(settings.injectionDepth || 2);
+    $('#cdx-s-enabled').prop('checked', settings.enabled);
+    $('#cdx-s-nudge').prop('checked', settings.enableNudge !== false);
+    $('#cdx-s-autorel').prop('checked', chatState.relationship_auto !== false);
+    $('#cdx-s-maxmem').val(settings.maxMemoriesInject || 5);
+    $('#cdx-maxmem-val').text(settings.maxMemoriesInject || 5);
+    $('#cdx-s-depth').val(settings.injectionDepth || 2);
+    $('#cdx-depth-val').text(settings.injectionDepth || 2);
+    $('#cdx-template-select').val('');
 }
 
 // ─── Nudge Notification ──────────────────────────────────────────────────────
 
-/**
- * Show a memory nudge notification. Called from the message handler in index.js.
- */
 export function showNudge(draftText, suggestedType, messageIndex) {
-    // Remove existing nudge
     $('#codex-nudge').remove();
-
-    const typeMeta = MEMORY_TYPE_META[suggestedType] || MEMORY_TYPE_META.trust;
 
     const nudge = $(`
         <div id="codex-nudge" class="codex-nudge">
-            <span class="codex-nudge-text">💭 Notable moment?</span>
-            <button class="codex-btn codex-btn-sm codex-btn-primary" id="codex-nudge-save">Save Memory</button>
-            <button class="codex-btn codex-btn-sm" id="codex-nudge-dismiss">Dismiss</button>
+            <span class="cdx-nudge-text">💭 Something happened</span>
+            <button class="cdx-nudge-btn cdx-nudge-save" id="cdx-nudge-save">Remember</button>
+            <button class="cdx-nudge-btn" id="cdx-nudge-dismiss">✕</button>
         </div>
     `);
 
@@ -643,7 +656,7 @@ export function showNudge(draftText, suggestedType, messageIndex) {
         bottom: '70px',
         left: '50%',
         transform: 'translateX(-50%)',
-        padding: '8px 16px',
+        padding: '6px 14px',
         borderRadius: '20px',
         background: 'rgba(28,28,32,0.92)',
         backdropFilter: 'blur(12px)',
@@ -655,26 +668,28 @@ export function showNudge(draftText, suggestedType, messageIndex) {
         alignItems: 'center',
         gap: '8px',
         boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+        animation: 'cdx-nudge-in 0.3s ease-out',
     });
 
     $('body').append(nudge);
-
     recordNudgeShown(messageIndex);
 
-    // Auto-dismiss after 10 seconds
     const timer = setTimeout(() => nudge.fadeOut(300, () => nudge.remove()), 10000);
 
-    nudge.find('#codex-nudge-save').on('click', () => {
+    nudge.find('#cdx-nudge-save').on('click', () => {
         clearTimeout(timer);
         nudge.remove();
-        // Open panel to memory editor with pre-filled draft
+        // Open panel with quick-add pre-filled
         $('#codex-panel').fadeIn(150);
-        openMemoryEditor(null);
-        $('#codex-me-text').val(draftText);
-        $('#codex-me-type').val(suggestedType);
+        renderPanel();
+        openQuickAdd(null);
+        $('#cdx-qa-text').val(draftText);
+        // Set the suggested type chip active
+        $('.cdx-type-chip').removeClass('cdx-type-active');
+        $(`.cdx-type-chip[data-type="${suggestedType}"]`).addClass('cdx-type-active');
     });
 
-    nudge.find('#codex-nudge-dismiss').on('click', () => {
+    nudge.find('#cdx-nudge-dismiss').on('click', () => {
         clearTimeout(timer);
         nudge.fadeOut(300, () => nudge.remove());
     });
