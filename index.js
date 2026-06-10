@@ -37,7 +37,7 @@ function addExtensionSettingsPanel() {
           <span>Enable Codex</span>
         </label>
         <p style="margin:6px 0 0;opacity:0.7;font-size:0.85em;line-height:1.4;">
-          Codex tracks character memories, relationship state, and behavioral modes.
+          Codex tracks character memories, evolution, and behavioral modes.
           Open the 📋 button to manage character data.
         </p>
       </div>
