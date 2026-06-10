@@ -10,8 +10,12 @@ import {
 import { getActiveState, getStates, setActiveState, addState, updateState, deleteState, loadTemplate } from './states.js';
 import { buildAndInject } from './injection.js';
 import {
+    getThreads, addThread, updateThread, deleteThread, resolveThread, getThreadHistory,
+} from './threads.js';
+import {
     EXT_DISPLAY_NAME, MEMORY_TYPE_META, MEMORY_WEIGHT_META,
     STATE_TEMPLATES,
+    THREAD_STATUS_META, THREAD_STATUS_CYCLE, THREAD_PRIORITY_META,
 } from './config.js';
 
 let editingMemory = null;
@@ -109,6 +113,15 @@ function createPanel() {
           <div id="cdx-mem-list" class="cdx-mem-list"></div>
         </div>
 
+        <!-- Plot Threads (v1.2) -->
+        <div class="cdx-field-section">
+          <div class="cdx-field-bar">
+            <span class="cdx-field-label">Open plot threads <span id="cdx-thr-count" class="cdx-dim"></span></span>
+            <button class="cdx-text-btn" id="cdx-add-thread">+ add</button>
+          </div>
+          <div id="cdx-thr-list" class="cdx-mem-list"></div>
+        </div>
+
         <!-- Growing Toward -->
         <div class="cdx-field-section">
           <div class="cdx-field-label">Where are they heading?</div>
@@ -131,6 +144,20 @@ function createPanel() {
             </select>
             <button class="cdx-btn-primary" id="cdx-qa-save">Save</button>
             <button class="cdx-icon-btn" id="cdx-qa-cancel">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Thread Quick-Add ── -->
+      <div class="cdx-quick-add" id="cdx-thr-add" style="display:none;">
+        <input type="text" id="cdx-ta-name" class="cdx-field-input" placeholder="Thread name (e.g. The missing heir)" />
+        <textarea id="cdx-ta-desc" rows="2" class="cdx-field-input" placeholder="What's this thread about? Where could it go?"></textarea>
+        <div class="cdx-qa-row">
+          <div class="cdx-qa-chips" id="cdx-ta-status-chips"></div>
+          <div class="cdx-qa-actions">
+            <label class="cdx-check" title="Primary threads get forward-motion priority"><input type="checkbox" id="cdx-ta-primary" /> ★</label>
+            <button class="cdx-btn-primary" id="cdx-ta-save">Save</button>
+            <button class="cdx-icon-btn" id="cdx-ta-cancel">✕</button>
           </div>
         </div>
       </div>
@@ -253,8 +280,50 @@ function bindEvents() {
     $(document).on('click', '#cdx-qa-cancel', closeQuickAdd);
 
     $(document).on('click', '.cdx-type-chip', function () {
-        $('.cdx-type-chip').removeClass('cdx-type-active');
+        // Chips are scoped per form (memory types vs thread statuses)
+        $(this).siblings('.cdx-type-chip').removeClass('cdx-type-active');
         $(this).addClass('cdx-type-active');
+    });
+
+    // ── Plot threads (v1.2) ──────────────────────────────────────────────
+    $(document).on('click', '#cdx-add-thread', () => openThreadAdd(null));
+    $(document).on('click', '#cdx-ta-save', saveFromThreadAdd);
+    $(document).on('click', '#cdx-ta-cancel', closeThreadAdd);
+
+    // Tap status icon to cycle building → escalating → climax
+    $(document).on('click', '.cdx-thr-status-btn', function () {
+        const id = $(this).data('id');
+        const thread = getThreads().find(t => t.id === id);
+        if (!thread) return;
+        const cycle = THREAD_STATUS_CYCLE;
+        const cur = cycle.indexOf(thread.status);
+        const next = cycle[(cur + 1) % cycle.length] || cycle[0]; // paused exits via edit form
+        updateThread(id, { status: next });
+        renderThreads();
+        buildAndInject();
+    });
+
+    $(document).on('click', '.cdx-thr-edit', function () {
+        const id = $(this).data('id');
+        const thread = getThreads().find(t => t.id === id);
+        if (thread) openThreadAdd(thread);
+    });
+
+    $(document).on('click', '.cdx-thr-resolve', function () {
+        const id = $(this).data('id');
+        if (resolveThread(id)) {
+            toastr.success('Thread resolved → history');
+            renderThreads();
+            buildAndInject();
+        }
+    });
+
+    $(document).on('click', '.cdx-thr-delete', function () {
+        const id = $(this).data('id');
+        if (deleteThread(id)) {
+            renderThreads();
+            buildAndInject();
+        }
     });
 
     $(document).on('click', '.cdx-mem-edit', function () {
@@ -370,6 +439,7 @@ function renderPanel() {
     $('#cdx-growing-toward').val(chatState.growing_toward || '');
 
     renderMemories();
+    renderThreads();
 }
 
 // ─── Memory Rendering ────────────────────────────────────────────────────────
@@ -450,6 +520,101 @@ function saveFromQuickAdd() {
 
     closeQuickAdd();
     renderMemories();
+    buildAndInject();
+}
+
+// ─── Thread Rendering (v1.2) ─────────────────────────────────────────────────
+
+let editingThread = null;
+
+function renderThreads() {
+    const threads = getThreads();
+    const resolvedCount = getThreadHistory().length;
+    const countLabel = resolvedCount > 0
+        ? `(${threads.length} open, ${resolvedCount} resolved)`
+        : `(${threads.length})`;
+    $('#cdx-thr-count').text(threads.length || resolvedCount ? countLabel : '');
+
+    if (!threads.length) {
+        $('#cdx-thr-list').html(`<div class="cdx-empty">No open threads. Add plot lines you want the story to keep moving.</div>`);
+        return;
+    }
+
+    const statusWeight = { climax: 3, escalating: 2, building: 1, paused: 0 };
+    const sorted = [...threads].sort((a, b) => {
+        const pa = a.priority === 'primary' ? 1 : 0;
+        const pb = b.priority === 'primary' ? 1 : 0;
+        if (pb !== pa) return pb - pa;
+        return (statusWeight[b.status] ?? 0) - (statusWeight[a.status] ?? 0);
+    });
+
+    const html = sorted.map(t => {
+        const sm = THREAD_STATUS_META[t.status] || THREAD_STATUS_META.building;
+        const isPaused = t.status === 'paused';
+        const star = t.priority === 'primary' ? '★ ' : '';
+        return `
+        <div class="cdx-mem-item" style="${isPaused ? 'opacity:0.5;' : ''}">
+            <button class="cdx-mem-weight-btn cdx-thr-status-btn" data-id="${t.id}" title="${sm.label} — tap to cycle · pause via ✎">${sm.icon}</button>
+            <div class="cdx-mem-body">
+                <div class="cdx-mem-text"><b>${star}${xss(t.name)}</b>${t.description ? ' — ' + xss(t.description) : ''}</div>
+                <span class="cdx-mem-type" style="color:${sm.color}">${sm.label}</span>
+            </div>
+            <div class="cdx-mem-actions">
+                <button class="cdx-icon-btn cdx-thr-resolve" data-id="${t.id}" title="Resolve (archive)">✓</button>
+                <button class="cdx-icon-btn cdx-thr-edit" data-id="${t.id}">✎</button>
+                <button class="cdx-icon-btn cdx-thr-delete" data-id="${t.id}">🗑</button>
+            </div>
+        </div>`;
+    }).join('');
+
+    $('#cdx-thr-list').html(html);
+}
+
+function openThreadAdd(thread) {
+    editingThread = thread;
+
+    const chips = Object.entries(THREAD_STATUS_META)
+        .filter(([k]) => k !== 'resolved') // Resolving is the ✓ button, not a status pick
+        .map(([k, v]) => {
+            const active = (thread?.status || 'building') === k ? 'cdx-type-active' : '';
+            return `<button class="cdx-type-chip cdx-thr-chip ${active}" data-status="${k}" title="${v.label}: ${v.desc}">${v.icon}</button>`;
+        }).join('');
+
+    $('#cdx-ta-status-chips').html(chips);
+    $('#cdx-ta-name').val(thread?.name || '');
+    $('#cdx-ta-desc').val(thread?.description || '');
+    $('#cdx-ta-primary').prop('checked', thread?.priority === 'primary');
+    $('#cdx-thr-add').slideDown(150);
+    setTimeout(() => $('#cdx-ta-name').focus(), 160);
+}
+
+function closeThreadAdd() {
+    editingThread = null;
+    $('#cdx-thr-add').slideUp(150);
+    $('#cdx-ta-name').val('');
+    $('#cdx-ta-desc').val('');
+}
+
+function saveFromThreadAdd() {
+    const name = $('#cdx-ta-name').val().trim();
+    if (!name) { toastr.warning('Threads need a name'); return; }
+
+    const description = $('#cdx-ta-desc').val().trim();
+    const status = $('.cdx-thr-chip.cdx-type-active').data('status') || 'building';
+    const priority = $('#cdx-ta-primary').prop('checked') ? 'primary' : 'secondary';
+
+    if (editingThread) {
+        updateThread(editingThread.id, { name, description, status, priority });
+    } else {
+        const created = addThread(name, description, priority, status);
+        if (!created) {
+            toastr.warning('Too many open threads — resolve or delete some first');
+            return;
+        }
+    }
+
+    closeThreadAdd();
+    renderThreads();
     buildAndInject();
 }
 

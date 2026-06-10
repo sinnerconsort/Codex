@@ -1,6 +1,6 @@
 export const EXT_ID = 'codex';
 export const EXT_DISPLAY_NAME = 'Codex';
-export const EXT_VERSION = '1.1.0';
+export const EXT_VERSION = '1.2.0';
 
 // ─── Memory Types ────────────────────────────────────────────────────────────
 
@@ -185,6 +185,32 @@ export const DEFAULT_THREAD = {
     description: '',
     priority: 'secondary',
     created_at: null,
+};
+
+// ─── Thread Metadata (v1.2) ──────────────────────────────────────────────────
+
+export const THREAD_STATUSES = {
+    BUILDING: 'building',
+    ESCALATING: 'escalating',
+    CLIMAX: 'climax',
+    PAUSED: 'paused',
+    RESOLVED: 'resolved',
+};
+
+export const THREAD_STATUS_META = {
+    building:   { label: 'Building',   icon: '🌱', color: '#7a9e7e', desc: 'Simmering in the background' },
+    escalating: { label: 'Escalating', icon: '🔥', color: '#b8a460', desc: 'Active and gaining momentum' },
+    climax:     { label: 'Climax',     icon: '⚡', color: '#c45c5c', desc: 'Coming to a head — push toward payoff' },
+    paused:     { label: 'Paused',     icon: '⏸️', color: '#888888', desc: 'On ice — not injected' },
+    resolved:   { label: 'Resolved',   icon: '✅', color: '#5c9ec4', desc: 'Done — archived to history' },
+};
+
+// Tap-to-cycle order for the status button (paused is deliberate, not cycled into)
+export const THREAD_STATUS_CYCLE = ['building', 'escalating', 'climax'];
+
+export const THREAD_PRIORITY_META = {
+    primary:   { label: 'Primary',   icon: '★' },
+    secondary: { label: 'Secondary', icon: '○' },
 };
 
 export const DEFAULT_SETTINGS = {

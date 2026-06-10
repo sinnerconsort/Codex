@@ -2,6 +2,7 @@ import { getContext } from '../../../../extensions.js';
 import { setExtensionPrompt } from '../../../../../script.js';
 import { getSettings, getChatState } from './state.js';
 import { getInjectableMemories } from './memories.js';
+import { getInjectableThreads } from './threads.js';
 import { getActiveState } from './states.js';
 
 const INJECT_KEY = 'codex_character';
@@ -57,6 +58,21 @@ export function buildAndInject() {
     if (memories.length) {
         const memText = memories.map(m => m.text).join('. ');
         parts.push(`Remembers: ${memText}.`);
+    }
+
+    // ── Open Plot Threads (v1.2) ─────────────────────────────────────────
+    const threads = getInjectableThreads(5);
+    if (threads.length) {
+        const threadLines = threads.map(t => {
+            const star = t.priority === 'primary' ? '★ ' : '';
+            const desc = t.description ? `: ${t.description}` : '';
+            return `- ${star}${t.name} [${t.status}]${desc}`;
+        });
+        const guidance = 'Weave open threads into scenes when natural. '
+            + 'Building threads simmer in the background; escalating threads should gain momentum; '
+            + 'climax threads push toward payoff. ★ threads deserve forward motion. '
+            + 'Never resolve a thread in a single beat.';
+        parts.push(`Open plot threads:\n${threadLines.join('\n')}\n(${guidance})`);
     }
 
     // ── Growing Toward ───────────────────────────────────────────────────
