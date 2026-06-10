@@ -8,7 +8,6 @@ import {
     detectNudgeSignals, recordNudgeShown, draftMemoryFromContext,
 } from './memories.js';
 import { getActiveState, getStates, setActiveState, addState, updateState, deleteState, loadTemplate } from './states.js';
-import { maybeRegenerateSummary } from './relationship.js';
 import { buildAndInject } from './injection.js';
 import {
     EXT_DISPLAY_NAME, MEMORY_TYPE_META, MEMORY_WEIGHT_META,

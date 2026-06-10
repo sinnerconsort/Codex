@@ -1,6 +1,6 @@
 export const EXT_ID = 'codex';
 export const EXT_DISPLAY_NAME = 'Codex';
-export const EXT_VERSION = '1.0.0';
+export const EXT_VERSION = '1.1.0';
 
 // ─── Memory Types ────────────────────────────────────────────────────────────
 
@@ -193,7 +193,6 @@ export const DEFAULT_SETTINGS = {
     injectionDepth: 2,
     maxMemoriesInject: 5,
     enableNudge: true,
-    relationshipAutoGen: true,
     // Per-card character configs
     characters: {},
     settingsVersion: 1,
@@ -204,9 +203,6 @@ export const DEFAULT_CHAT_STATE = {
     whats_changed: '',             // Diff against the card — what's evolved
     growing_toward: '',            // Direction of change — where the character is heading
     memories: [],
-    // Legacy / power-user
-    relationship_summary: '',
-    relationship_auto: true,
     active_state: null,
     // Story (Phase 2)
     threads: [],
@@ -216,13 +212,6 @@ export const DEFAULT_CHAT_STATE = {
         'Scale dramatic weight proportionally to actual stakes',
     ],
     thread_history: [],
-    // Game mode (Phase 3)
-    game_mode: false,
-    meters: { affinity: 50, tension: 15, standing: 30, wildcard: null },
-    flags: {},
-    route: { name: null, locked: false, phase: 1, candidates: [] },
-    choice_tree: [],
-    tag_history: {},
     // Meta
     last_nudge_at: 0,
 };

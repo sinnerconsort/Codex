@@ -1,22 +1,17 @@
 /**
- * Codex Public API v1.0
+ * Codex Public API v1.1
  * Access via: window.CodexAPI (available after Codex init)
  */
 
 import { getSettings, getChatState } from './state.js';
-import { getMemories, getInjectableMemories } from './memories.js';
-import { getActiveState, getStates } from './states.js';
-import { getRelationshipSummary } from './relationship.js';
+import { getMemories } from './memories.js';
+import { getActiveState } from './states.js';
 import { EXT_VERSION } from './config.js';
 
 // ─── Character Methods ───────────────────────────────────────────────────────
 
 function apiGetMemories(type) {
     return getMemories(type ? { type } : {});
-}
-
-function apiGetRelationshipSummary() {
-    return getRelationshipSummary();
 }
 
 function apiGetActiveState() {
@@ -55,51 +50,10 @@ function apiGetWritingDirectives() {
     return [...(state.writing_directives || [])];
 }
 
-// ─── Game Methods (Phase 3 stubs) ────────────────────────────────────────────
-
-function apiGetMeters() {
-    const state = getChatState();
-    if (!state.game_mode) return null;
-    return { ...state.meters };
-}
-
-function apiGetMeterBand(name) {
-    // Phase 3 implementation
-    return null;
-}
-
-function apiGetFlags() {
-    const state = getChatState();
-    if (!state.game_mode) return null;
-    return { ...state.flags };
-}
-
-function apiGetRoute() {
-    const state = getChatState();
-    if (!state.game_mode) return null;
-    return { ...state.route };
-}
-
-function apiGetChoiceTree() {
-    const state = getChatState();
-    if (!state.game_mode) return null;
-    return [...(state.choice_tree || [])];
-}
-
-function apiGetTagHistory() {
-    const state = getChatState();
-    if (!state.game_mode) return null;
-    return { ...(state.tag_history || {}) };
-}
-
 // ─── Meta ────────────────────────────────────────────────────────────────────
 
 function apiIsActive() {
     return getSettings()?.enabled === true;
-}
-
-function apiIsGameMode() {
-    return getChatState()?.game_mode === true;
 }
 
 // ─── Registration ────────────────────────────────────────────────────────────
@@ -108,7 +62,6 @@ export function registerAPI() {
     window.CodexAPI = {
         // Character
         getMemories: apiGetMemories,
-        getRelationshipSummary: apiGetRelationshipSummary,
         getActiveState: apiGetActiveState,
         getMessageCount: apiGetMessageCount,
 
@@ -117,17 +70,8 @@ export function registerAPI() {
         getThreadByName: apiGetThreadByName,
         getWritingDirectives: apiGetWritingDirectives,
 
-        // Game (Phase 3)
-        getMeters: apiGetMeters,
-        getMeterBand: apiGetMeterBand,
-        getFlags: apiGetFlags,
-        getRoute: apiGetRoute,
-        getChoiceTree: apiGetChoiceTree,
-        getTagHistory: apiGetTagHistory,
-
         // Meta
         isActive: apiIsActive,
-        isGameMode: apiIsGameMode,
         version: EXT_VERSION,
     };
     console.log('[Codex] Public API registered → window.CodexAPI');

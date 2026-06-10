@@ -45,6 +45,12 @@ export function sanitizeSettings() {
     }
 }
 
+// Fields removed in v1.1 — scrubbed from existing chats on load
+const REMOVED_CHAT_FIELDS = [
+    'relationship_summary', 'relationship_auto',
+    'game_mode', 'meters', 'flags', 'route', 'choice_tree', 'tag_history',
+];
+
 export function sanitizeChatState() {
     try {
         const state = getChatState();
@@ -56,18 +62,15 @@ export function sanitizeChatState() {
         if (!Array.isArray(state.memories)) state.memories = [];
         if (typeof state.whats_changed !== 'string') state.whats_changed = '';
         if (typeof state.growing_toward !== 'string') state.growing_toward = '';
-        if (typeof state.relationship_summary !== 'string') state.relationship_summary = '';
         if (!Array.isArray(state.threads)) state.threads = [];
         if (!Array.isArray(state.writing_directives)) {
             state.writing_directives = [...DEFAULT_CHAT_STATE.writing_directives];
         }
         if (!Array.isArray(state.thread_history)) state.thread_history = [];
-        if (!Array.isArray(state.choice_tree)) state.choice_tree = [];
-        if (typeof state.tag_history !== 'object' || state.tag_history === null) {
-            state.tag_history = {};
-        }
-        if (typeof state.flags !== 'object' || state.flags === null) {
-            state.flags = {};
+
+        // v1.1 migration: scrub fields from removed features
+        for (const key of REMOVED_CHAT_FIELDS) {
+            if (key in state) delete state[key];
         }
     } catch (e) {
         console.warn('[Codex] sanitizeChatState failed:', e);
