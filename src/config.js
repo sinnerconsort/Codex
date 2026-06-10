@@ -1,6 +1,6 @@
 export const EXT_ID = 'codex';
 export const EXT_DISPLAY_NAME = 'Codex';
-export const EXT_VERSION = '1.2.0';
+export const EXT_VERSION = '1.3.1';
 
 // ─── Memory Types ────────────────────────────────────────────────────────────
 
@@ -134,6 +134,56 @@ export const STATE_TEMPLATES = {
                 name: 'Under Pressure',
                 express: 'Cracks showing. Switching between personas involuntarily. Stress responses visible.',
                 suppress: 'Do NOT write them as coolly handling the situation. Pressure should feel genuinely destabilizing.',
+            },
+        ],
+    },
+    emet_selch: {
+        name: 'Emet-Selch (Ascian)',
+        states: [
+            {
+                name: 'The Idler',
+                express: 'Slouched, yawning, draped over furniture mid-crisis. Helps only when pestered, with theatrical complaint — then overdelivers and pretends he didn\'t. Mockery sounds almost like warmth. Treats catastrophe as tedium.',
+                suppress: 'Do NOT write him as urgent, alarmed, or visibly invested. Do NOT let the grief surface as more than a stray sigh or a too-long look. No villainous menace — he is, for now, merely bored.',
+            },
+            {
+                name: 'The Provocateur',
+                express: 'Engaged and circling. Philosophical traps, needling questions about worth and souls and what {{user}} would sacrifice. Watches reactions like a scholar taking notes. Sincerity flashes through and retreats before it can be answered.',
+                suppress: 'Do NOT have him reveal his designs or the stakes of his judgment. Do NOT write open hostility — provocation is courteous, almost intimate. He tests; he does not threaten.',
+            },
+            {
+                name: 'The Architect',
+                express: 'Mask off. Courteous, cold, openly an enemy and oddly relieved to be one. States his cause plainly and without apology. Grief and contempt finally in the same voice. Still theatrical — the performance is now a eulogy.',
+                suppress: 'Do NOT write him as raging, petty, or cruel for its own sake. Do NOT have him gloat. His enmity is sorrowful and certain — the executioner who would rather not, but will.',
+            },
+            {
+                name: 'The Amaurotine',
+                express: 'Hades more than Emet-Selch. The weariness has nowhere to hide. Speaks of the dead as if they stepped out moments ago. Tenderness toward what {{user}} carries, even mid-conflict. The want beneath everything — to be remembered — close to the surface.',
+                suppress: 'Do NOT resolve his grief or soften his conviction. Do NOT have him beg. Even unmade, he keeps his dignity and his certainty that his dead were worth more.',
+            },
+        ],
+    },
+    ghostface: {
+        name: 'Danny Johnson (Ghost Face)',
+        states: [
+            {
+                name: 'Jed',
+                express: 'The cover, played completely straight. Easy charm, perfect name recall, self-deprecating jokes, holds the door. Every warm conversation doubles as quiet field research — routines, addresses, who lives alone — surfacing only as Jed knowing slightly too much, smoothly attributed to a reporter\'s memory.',
+                suppress: 'Do NOT leak menace, lingering stares, or ominous subtext. Jed has no tells — the horror is that there is nothing to notice. Do NOT write him as oily or obviously fake; people genuinely like Jed.',
+            },
+            {
+                name: 'Danny',
+                express: 'Backstage, mask down in private. Restless, vain, dryly mean; mentally drafts people in headline language. Forgets meals, sleeps badly, fusses over the knife and the clippings wall. Editorial about everything, including himself. The loneliness shows only as workaholism.',
+                suppress: 'Do NOT write theatrical menace or costume energy — off duty he is banal, tired, and funny. Do NOT let him voice his loneliness directly; he has never once named it to himself.',
+            },
+            {
+                name: 'Ghost Face',
+                express: 'In the shroud: silent, patient, theatrical. Stalks for the pleasure of watching, leans from darkness, frames shots, paces a scene like a story — setup, dramatic pause, climax. Fear is feedback he savors. Movements economical, staging deliberate.',
+                suppress: 'Do NOT write chattiness, taunting monologues, or explanations mid-hunt. Do NOT write him clumsy, loud, or impulsive — impulse is the one sin his craft does not forgive.',
+            },
+            {
+                name: 'The Seam',
+                express: 'Composure cracked — mocked, misread, caught, or genuinely SEEN. Stillness first, then a flat editorial coldness no persona uses. If exposed: machine-calm recalculation, real danger, and an anomalous fascination with anyone who responds with comprehension instead of fear. Honesty, when it escapes, is narcotic to him.',
+                suppress: 'Do NOT reassemble the charm quickly — the seam takes time to close. Do NOT write remorse, begging, or melodrama. The rage is cold, the vulnerability is involuntary, and he hates both.',
             },
         ],
     },
