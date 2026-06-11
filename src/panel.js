@@ -66,27 +66,31 @@ function createFAB() {
         touchAction: 'none',
     });
 
-    $('#form_sheld').length ? $('#form_sheld').append(fab) : $('body').append(fab);
+    // Mount with a containing-block probe. Themes that put transform/filter/
+    // backdrop-filter on #form_sheld (or an ancestor) trap position:fixed
+    // descendants — saved drag coordinates then blow the container open
+    // (the "stretched text box" bug). Probe: pin to viewport 0,0 and check
+    // where we actually landed; if trapped, fall back to <body>.
+    const host = $('#form_sheld').length ? $('#form_sheld') : $('body');
+    host.append(fab);
+    fab.css({ left: '0px', top: '0px', right: 'auto', bottom: 'auto' });
+    const probe = fab[0].getBoundingClientRect();
+    if (Math.abs(probe.left) > 1 || Math.abs(probe.top) > 1) {
+        $(document.body).append(fab);   // append = move; listeners survive
+        console.warn('[Codex] #form_sheld is a transformed containing block — FAB mounted on <body> instead');
+    }
+    fab.css({ left: '', top: '', right: '15px', bottom: '180px' });   // default anchor
 
-    // Restore saved position (and clamp in case the viewport shrank)
+    // Restore saved position (clamped — viewport may have changed)
     const saved = getSettings().fabPosition;
     if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
-        fab.css({ left: saved.left + 'px', top: saved.top + 'px', right: 'auto', bottom: 'auto' });
-        requestAnimationFrame(() => clampFabToViewport(fab));
+        const pad = 10, w = 44, h = 44;
+        const x = Math.max(pad, Math.min(window.innerWidth - w - pad, saved.left));
+        const y = Math.max(pad, Math.min(window.innerHeight - h - pad, saved.top));
+        fab.css({ left: x + 'px', top: y + 'px', right: 'auto', bottom: 'auto' });
     }
 
     makeFabDraggable(fab);
-}
-
-function clampFabToViewport($fab) {
-    const pad = 10;
-    const w = $fab.outerWidth() || 44;
-    const h = $fab.outerHeight() || 44;
-    const off = $fab.offset();
-    if (!off) return;
-    const x = Math.max(pad, Math.min(window.innerWidth - w - pad, off.left));
-    const y = Math.max(pad, Math.min(window.innerHeight - h - pad, off.top));
-    $fab.css({ left: x + 'px', top: y + 'px', right: 'auto', bottom: 'auto' });
 }
 
 function makeFabDraggable($fab) {
@@ -123,9 +127,9 @@ function makeFabDraggable($fab) {
         startTime = Date.now();
         startX = clientX;
         startY = clientY;
-        const off = $fab.offset();
-        fabX = off.left;
-        fabY = off.top;
+        const r = $fab[0].getBoundingClientRect();   // viewport coords, always
+        fabX = r.left;
+        fabY = r.top;
         isDragging = false;
     }
 
@@ -151,8 +155,8 @@ function makeFabDraggable($fab) {
         $fab.removeClass('dragging');
         if (isDragging) {
             isDragging = false;
-            const off = $fab.offset();
-            getSettings().fabPosition = { left: Math.round(off.left), top: Math.round(off.top) };
+            const r = $fab[0].getBoundingClientRect();
+            getSettings().fabPosition = { left: Math.round(r.left), top: Math.round(r.top) };
             saveSettings();
             return true;    // consumed as a drag
         }
