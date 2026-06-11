@@ -30,6 +30,7 @@ export function initPanel() {
 }
 
 export function destroyPanel() {
+    $(document).off('.codexFab');
     $('#codex-fab').remove();
     $('#codex-panel').remove();
     $('#codex-nudge').remove();
@@ -62,10 +63,133 @@ function createFAB() {
         cursor: 'pointer',
         zIndex: '31000',
         boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+        touchAction: 'none',
     });
 
-    fab.on('click', togglePanel);
     $('#form_sheld').length ? $('#form_sheld').append(fab) : $('body').append(fab);
+
+    // Restore saved position (and clamp in case the viewport shrank)
+    const saved = getSettings().fabPosition;
+    if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+        fab.css({ left: saved.left + 'px', top: saved.top + 'px', right: 'auto', bottom: 'auto' });
+        requestAnimationFrame(() => clampFabToViewport(fab));
+    }
+
+    makeFabDraggable(fab);
+}
+
+function clampFabToViewport($fab) {
+    const pad = 10;
+    const w = $fab.outerWidth() || 44;
+    const h = $fab.outerHeight() || 44;
+    const off = $fab.offset();
+    if (!off) return;
+    const x = Math.max(pad, Math.min(window.innerWidth - w - pad, off.left));
+    const y = Math.max(pad, Math.min(window.innerHeight - h - pad, off.top));
+    $fab.css({ left: x + 'px', top: y + 'px', right: 'auto', bottom: 'auto' });
+}
+
+function makeFabDraggable($fab) {
+    const LONG_PRESS_DURATION = 200;   // ms held before drag starts
+    const MOVE_THRESHOLD = 10;         // px moved before drag starts
+
+    let isDragging = false;
+    let startTime = 0;
+    let startX = 0, startY = 0;        // pointer at start
+    let fabX = 0, fabY = 0;            // fab offset at start
+
+    // RAF-batched position updates for smooth dragging
+    let rafId = null;
+    let pendingX = null, pendingY = null;
+    function flushPosition() {
+        if (pendingX !== null && pendingY !== null) {
+            $fab.css({ left: pendingX + 'px', top: pendingY + 'px', right: 'auto', bottom: 'auto' });
+            pendingX = null; pendingY = null;
+        }
+        rafId = null;
+    }
+
+    function clamp(x, y) {
+        const pad = 10;
+        const w = $fab.outerWidth() || 44;
+        const h = $fab.outerHeight() || 44;
+        return [
+            Math.max(pad, Math.min(window.innerWidth - w - pad, x)),
+            Math.max(pad, Math.min(window.innerHeight - h - pad, y)),
+        ];
+    }
+
+    function beginGesture(clientX, clientY) {
+        startTime = Date.now();
+        startX = clientX;
+        startY = clientY;
+        const off = $fab.offset();
+        fabX = off.left;
+        fabY = off.top;
+        isDragging = false;
+    }
+
+    function moveGesture(clientX, clientY) {
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const held = Date.now() - startTime;
+
+        if (!isDragging && (held > LONG_PRESS_DURATION || dist > MOVE_THRESHOLD)) {
+            isDragging = true;
+            $fab.addClass('dragging');
+        }
+        if (!isDragging) return false;
+
+        const [x, y] = clamp(fabX + dx, fabY + dy);
+        pendingX = x; pendingY = y;
+        if (!rafId) rafId = requestAnimationFrame(flushPosition);
+        return true;
+    }
+
+    function endGesture() {
+        $fab.removeClass('dragging');
+        if (isDragging) {
+            isDragging = false;
+            const off = $fab.offset();
+            getSettings().fabPosition = { left: Math.round(off.left), top: Math.round(off.top) };
+            saveSettings();
+            return true;    // consumed as a drag
+        }
+        return false;       // it was a tap
+    }
+
+    // ── Touch ──
+    $fab.on('touchstart', function (e) {
+        const t = e.originalEvent.touches[0];
+        beginGesture(t.clientX, t.clientY);
+    });
+    $fab.on('touchmove', function (e) {
+        const t = e.originalEvent.touches[0];
+        if (moveGesture(t.clientX, t.clientY)) e.preventDefault();   // block scroll while dragging
+    });
+    $fab.on('touchend', function (e) {
+        const wasDrag = endGesture();
+        e.preventDefault();              // suppress the ghost click either way
+        if (!wasDrag) togglePanel();     // tap = toggle
+    });
+
+    // ── Mouse (desktop) ──
+    let mouseDown = false;
+    $fab.on('mousedown', function (e) {
+        e.preventDefault();
+        mouseDown = true;
+        beginGesture(e.clientX, e.clientY);
+    });
+    $(document).on('mousemove.codexFab', function (e) {
+        if (!mouseDown) return;
+        moveGesture(e.clientX, e.clientY);
+    });
+    $(document).on('mouseup.codexFab', function () {
+        if (!mouseDown) return;
+        mouseDown = false;
+        if (!endGesture()) togglePanel();
+    });
 }
 
 function togglePanel() {

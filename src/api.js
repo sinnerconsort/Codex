@@ -4,6 +4,7 @@
  */
 
 import { getSettings, getChatState } from './state.js';
+import { getContext } from '../../../../extensions.js';
 import { getMemories } from './memories.js';
 import { getActiveState } from './states.js';
 import { EXT_VERSION } from './config.js';
@@ -21,12 +22,21 @@ function apiGetActiveState() {
 }
 
 function apiGetMessageCount() {
+    // (was require('../../../../extensions.js') — require doesn't exist in
+    // browser ESM, so this always threw and returned 0)
     try {
-        const { getContext } = require('../../../../extensions.js');
         return getContext()?.chat?.length || 0;
     } catch {
         return 0;
     }
+}
+
+function apiGetWhatsChanged() {
+    return (getChatState().whats_changed || '').trim();
+}
+
+function apiGetGrowingToward() {
+    return (getChatState().growing_toward || '').trim();
 }
 
 // ─── Story Methods ───────────────────────────────────────────────────────────
@@ -64,6 +74,8 @@ export function registerAPI() {
         getMemories: apiGetMemories,
         getActiveState: apiGetActiveState,
         getMessageCount: apiGetMessageCount,
+        getWhatsChanged: apiGetWhatsChanged,
+        getGrowingToward: apiGetGrowingToward,
 
         // Story
         getActiveThreads: apiGetActiveThreads,
