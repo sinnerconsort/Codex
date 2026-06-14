@@ -1,5 +1,5 @@
 /**
- * Codex v1.0 — Character & Story Engine
+ * Codex v1.3 — Character & Story Engine
  * Thin entry point — imports from src/ modules
  */
 import {
@@ -18,6 +18,7 @@ import { buildAndInject, clearInjection } from './src/injection.js';
 import { detectNudgeSignals, draftMemoryFromContext } from './src/memories.js';
 import { initPanel, destroyPanel, showNudge } from './src/panel.js';
 import { registerAPI, unregisterAPI } from './src/api.js';
+import { maintainThreads, getThreads } from './src/threads.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  EXTENSION SETTINGS DRAWER
@@ -64,26 +65,39 @@ function addExtensionSettingsPanel() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  MESSAGE HANDLER — Nudge Detection
+//  MESSAGE HANDLER — Ledger upkeep + Nudge Detection
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function onMessageReceived() {
     const settings = getSettings();
     if (!settings.enabled) return;
 
-    // Rebuild injection on every message to keep context fresh
+    const ctx = getContext();
+    const hasChat = !!ctx?.chat?.length;
+    const lastMsg = hasChat ? ctx.chat[ctx.chat.length - 1] : null;
+    const msgIndex = hasChat ? ctx.chat.length - 1 : 0;
+
+    // ── Ledger upkeep ────────────────────────────────────────────────────────
+    // Reinforce threads the latest exchange touched; age the rest so neglected
+    // threads cool, step down, and eventually drop out of injection. Scans both
+    // sides of the exchange so a user-introduced reference counts too.
+    if (hasChat) {
+        try {
+            const recentText = ctx.chat.slice(-2).map(m => m?.mes || '').join('\n');
+            maintainThreads(recentText, msgIndex);
+        } catch (e) {
+            console.warn('[Codex] thread maintenance failed:', e);
+        }
+    }
+
+    // Rebuild injection on every message to keep context fresh — now reflects
+    // the freshly-aged ledger.
     buildAndInject();
 
-    // Check for memory nudge
+    // ── Memory nudge ─────────────────────────────────────────────────────────
     if (!settings.enableNudge) return;
-
-    const ctx = getContext();
-    if (!ctx?.chat?.length) return;
-
-    const lastMsg = ctx.chat[ctx.chat.length - 1];
     if (!lastMsg || lastMsg.is_user) return; // Only scan AI responses
 
-    const msgIndex = ctx.chat.length - 1;
     const result = detectNudgeSignals(lastMsg.mes || '', msgIndex);
 
     if (result?.shouldNudge) {
@@ -135,6 +149,21 @@ jQuery(async () => {
         });
 
         registerAPI();
+
+        // Mobile/no-console peek: run `javascript:Codex.threads()` in the address
+        // bar to see each thread's status/heat/silence, or Codex.maintain() to
+        // force a maintenance pass against the last exchange.
+        window.Codex = {
+            threads: () => getThreads().map(t => ({
+                name: t.name, status: t.status, priority: t.priority,
+                heat: t.heat ?? 0, silent: t.silent ?? 0,
+            })),
+            maintain: () => {
+                const c = getContext();
+                const text = (c?.chat || []).slice(-2).map(m => m?.mes || '').join('\n');
+                return maintainThreads(text, (c?.chat?.length || 1) - 1);
+            },
+        };
 
         console.log(`[Codex] ✅ v${EXT_VERSION} ready`);
         toastr.success(`Codex v${EXT_VERSION} loaded`, '', { timeOut: 2000 });
