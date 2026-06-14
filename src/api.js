@@ -7,6 +7,7 @@ import { getSettings, getChatState } from './state.js';
 import { getContext } from '../../../../extensions.js';
 import { getMemories } from './memories.js';
 import { getActiveState } from './states.js';
+import { getInjectableThreads } from './threads.js';
 import { EXT_VERSION } from './config.js';
 
 // ─── Character Methods ───────────────────────────────────────────────────────
@@ -55,6 +56,18 @@ function apiGetThreadByName(name) {
     ) || null;
 }
 
+// The ledger's ranked "loaded" threads — already sorted primary → urgency → heat,
+// paused/resolved filtered out. This is what siblings (e.g. Fortuna) read to aim
+// events at threads the story is actually carrying, rather than random ones.
+function apiGetLoadedThreads(max = 5) {
+    return getInjectableThreads(max).map(t => ({
+        name: t.name,
+        status: t.status,
+        priority: t.priority,
+        heat: t.heat ?? 0,
+    }));
+}
+
 function apiGetWritingDirectives() {
     const state = getChatState();
     return [...(state.writing_directives || [])];
@@ -80,6 +93,7 @@ export function registerAPI() {
         // Story
         getActiveThreads: apiGetActiveThreads,
         getThreadByName: apiGetThreadByName,
+        getLoadedThreads: apiGetLoadedThreads,
         getWritingDirectives: apiGetWritingDirectives,
 
         // Meta
