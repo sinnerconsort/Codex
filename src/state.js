@@ -67,6 +67,14 @@ export function sanitizeChatState() {
             state.writing_directives = [...DEFAULT_CHAT_STATE.writing_directives];
         }
         if (!Array.isArray(state.thread_history)) state.thread_history = [];
+        if (!state.vad || typeof state.vad !== 'object') {
+            state.vad = JSON.parse(JSON.stringify(DEFAULT_CHAT_STATE.vad));
+        } else {
+            for (const axis of ['valence', 'arousal', 'dominance']) {
+                if (typeof state.vad[axis] !== 'number') state.vad[axis] = 0;
+            }
+            if (typeof state.vad.label !== 'string') state.vad.label = 'neutral';
+        }
 
         // v1.1 migration: scrub fields from removed features
         for (const key of REMOVED_CHAT_FIELDS) {

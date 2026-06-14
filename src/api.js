@@ -73,6 +73,19 @@ function apiGetWritingDirectives() {
     return [...(state.writing_directives || [])];
 }
 
+// The active character's current emotional state (VAD). Read by Echo for tone
+// and by the ledger for disposition-aware thread weighting. Written by the VAD evaluator.
+function apiGetEmotionalState() {
+    const v = getChatState().vad || {};
+    return {
+        valence: typeof v.valence === 'number' ? v.valence : 0,
+        arousal: typeof v.arousal === 'number' ? v.arousal : 0,
+        dominance: typeof v.dominance === 'number' ? v.dominance : 0,
+        label: typeof v.label === 'string' ? v.label : 'neutral',
+        updated_at: v.updated_at ?? null,
+    };
+}
+
 // ─── Meta ────────────────────────────────────────────────────────────────────
 
 function apiIsActive() {
@@ -95,6 +108,7 @@ export function registerAPI() {
         getThreadByName: apiGetThreadByName,
         getLoadedThreads: apiGetLoadedThreads,
         getWritingDirectives: apiGetWritingDirectives,
+        getEmotionalState: apiGetEmotionalState,
 
         // Meta
         isActive: apiIsActive,

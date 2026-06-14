@@ -288,6 +288,12 @@ export const DEFAULT_CHAT_STATE = {
         'Scale dramatic weight proportionally to actual stakes',
     ],
     thread_history: [],
+    // Emotional state (VAD) — how the active character feels right now.
+    //   valence:  negative ↔ positive   (-1.0 … 1.0)
+    //   arousal:  calm ↔ activated       (-1.0 … 1.0)
+    //   dominance: helpless ↔ in-control (-1.0 … 1.0)
+    // Read by Echo (tone) and by the ledger (thread weighting). Written by the VAD evaluator.
+    vad: { valence: 0, arousal: 0, dominance: 0, label: 'neutral', updated_at: null },
     // Meta
     last_nudge_at: 0,
 };
