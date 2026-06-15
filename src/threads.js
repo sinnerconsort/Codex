@@ -1,5 +1,6 @@
 import { getChatState, generateId, saveChatData } from './state.js';
 import { THREAD_STATUSES, THREAD_STATUS_CYCLE } from './config.js';
+import { getActiveState } from './states.js';
 
 const MAX_THREADS = 12;
 const MAX_HISTORY = 30;
@@ -19,6 +20,20 @@ const LEDGER = {
     STALE_DEMOTE:    8,   // silent turns before a thread steps DOWN one status
     STALE_DORMANT:   16,  // silent turns before a (secondary) thread auto-pauses
     MIN_NAME_TOKEN:  4,   // ignore name words shorter than this when matching mentions
+};
+
+// ─── Disposition weighting (v1.4) ────────────────────────────────────────────
+// Decay isn't a fixed clock — it's paced by HOW THE CHARACTER FEELS (VAD) and
+// what they're disposed toward. An agitated/helpless character holds onto
+// threads (they linger); a calm/in-control one lets them go (they fade). A
+// thread the active state *fixates on* resists decay; one it *ignores* fades
+// fast. With neutral mood and no leanings set, pace = 1.0 (plain v1.3 aging).
+const DISPOSITION = {
+    MOOD_PER_AGITATION: 0.12, // each point of (arousal − dominance) slows decay this much
+    PACE_MIN:           0.25, // floor: even maximally agitated, threads still age
+    PACE_MAX:           2.5,  // ceiling: calm + ignored fades fast, not instant
+    FIXATE_FACTOR:      0.4,  // active disposition fixates on this thread → lingers
+    IGNORE_FACTOR:      2.0,  // active disposition ignores this thread → fades fast
 };
 
 // ─── CRUD ────────────────────────────────────────────────────────────────────
@@ -46,6 +61,7 @@ export function addThread(name, description = '', priority = 'secondary', status
         silent: 0,
         last_seen_msg: null,
         created_msg: null,
+        decay_accum: 0,        // v1.4: paced staleness accumulator
     };
 
     state.threads.push(thread);
@@ -182,6 +198,30 @@ function stepStatus(status, dir) {
     return THREAD_STATUS_CYCLE[next];
 }
 
+// Does the active character's disposition fixate on / ignore this thread?
+// Reads optional `leanings: { fixates: [...], ignores: [...] }` on the active state.
+function leaningFactor(thread) {
+    let st = null;
+    try { st = getActiveState(); } catch { st = null; }
+    const lean = st && st.leanings;
+    if (!lean) return 1.0;
+    const hay = `${thread.name || ''} ${thread.description || ''}`.toLowerCase();
+    const hit = list => Array.isArray(list) && list.some(k => k && hay.includes(String(k).toLowerCase()));
+    if (hit(lean.fixates)) return DISPOSITION.FIXATE_FACTOR;
+    if (hit(lean.ignores)) return DISPOSITION.IGNORE_FACTOR;
+    return 1.0;
+}
+
+// How fast THIS thread ages this turn, given the character's mood (VAD) and
+// disposition toward it. <1 lingers (anxious / fixated), >1 fades (calm / ignored).
+function decayPace(thread) {
+    const vad = getChatState().vad || { arousal: 0, dominance: 0 };
+    const agitation = (Number(vad.arousal) || 0) - (Number(vad.dominance) || 0); // −4…4
+    let pace = 1 - DISPOSITION.MOOD_PER_AGITATION * agitation;                    // agitated → slower
+    pace *= leaningFactor(thread);
+    return Math.max(DISPOSITION.PACE_MIN, Math.min(DISPOSITION.PACE_MAX, pace));
+}
+
 /**
  * Per-message ledger upkeep. Call once per message (on MESSAGE_RECEIVED) with
  * the recent message text and the current chat index.
@@ -204,12 +244,14 @@ export function maintainThreads(text = '', msgIndex = 0) {
         // Backfill ledger fields for threads created before v1.3 / first run.
         if (typeof t.heat !== 'number') { t.heat = 0; changed = true; }
         if (typeof t.silent !== 'number') { t.silent = 0; changed = true; }
+        if (typeof t.decay_accum !== 'number') { t.decay_accum = t.silent || 0; changed = true; }
         if (t.created_msg == null) { t.created_msg = msgIndex; changed = true; }
 
         const mentioned = lower && threadMentioned(t, lower);
 
         if (mentioned) {
             t.silent = 0;
+            t.decay_accum = 0;
             t.last_seen_msg = msgIndex;
             t.heat = Math.min(LEDGER.MAX_HEAT, t.heat + LEDGER.HEAT_ON_MENTION);
             summary.reinforced.push(t.name);
@@ -229,22 +271,29 @@ export function maintainThreads(text = '', msgIndex = 0) {
             continue;
         }
 
-        // Ignored this turn → cool with age.
+        // Ignored this turn → cool with age, paced by mood + disposition.
         if (t.status === THREAD_STATUSES.PAUSED) continue; // already furniture
 
+        const prev = Math.floor(t.decay_accum);
         t.silent += 1;
+        t.decay_accum += decayPace(t);
+        const eff = Math.floor(t.decay_accum);   // effective (paced) staleness
         changed = true;
-
-        if (t.silent % LEDGER.COOL_EVERY === 0 && t.heat > 0) {
-            t.heat = Math.max(0, t.heat - 1);
-        }
 
         const isPrimary = t.priority === 'primary';
 
-        if (t.silent >= LEDGER.STALE_DORMANT && !isPrimary && t.status === THREAD_STATUSES.BUILDING) {
+        // Heat cools each time effective staleness crosses a COOL_EVERY boundary.
+        if (t.heat > 0 && Math.floor(eff / LEDGER.COOL_EVERY) > Math.floor(prev / LEDGER.COOL_EVERY)) {
+            t.heat = Math.max(0, t.heat - 1);
+        }
+
+        // Secondary 'building' threads go dormant when effective staleness first
+        // crosses the dormancy line. Primary threads never vanish.
+        if (!isPrimary && t.status === THREAD_STATUSES.BUILDING &&
+            eff >= LEDGER.STALE_DORMANT && prev < LEDGER.STALE_DORMANT) {
             t.status = THREAD_STATUSES.PAUSED;        // fell off the ledger → furniture
             summary.dormant.push(t.name);
-        } else if (t.silent % LEDGER.STALE_DEMOTE === 0) {
+        } else if (Math.floor(eff / LEDGER.STALE_DEMOTE) > Math.floor(prev / LEDGER.STALE_DEMOTE)) {
             const lowered = stepStatus(t.status, -1); // climax → escalating → building
             if (lowered !== t.status) {
                 t.status = lowered;
