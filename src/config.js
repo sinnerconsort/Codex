@@ -269,6 +269,10 @@ export const DEFAULT_SETTINGS = {
     injectionDepth: 2,
     maxMemoriesInject: 5,
     enableNudge: true,
+    // VAD emotional evaluator
+    vad_enabled: true,
+    vad_cooldown: 2,          // evaluate at most once every N assistant messages
+    vad_min_confidence: 0.35, // ignore low-confidence judgments
     // Per-card character configs
     characters: {},
     settingsVersion: 1,
