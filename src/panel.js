@@ -250,6 +250,12 @@ function createPanel() {
           <div id="cdx-thr-list" class="cdx-mem-list"></div>
         </div>
 
+        <!-- Emotional state (VAD) -->
+        <div class="cdx-field-section" id="cdx-vad-section">
+          <div class="cdx-field-label">Emotional state <span id="cdx-vad-label" class="cdx-dim"></span></div>
+          <div id="cdx-vad-bars"></div>
+        </div>
+
         <!-- Growing Toward -->
         <div class="cdx-field-section">
           <div class="cdx-field-label">Where are they heading?</div>
@@ -311,6 +317,13 @@ function createPanel() {
           <input type="range" id="cdx-s-depth" min="0" max="6" value="2" />
         </div>
 
+        <label class="cdx-check"><input type="checkbox" id="cdx-s-vad" /> Track emotional state (VAD)</label>
+        <div class="cdx-setting-row">
+          <span>VAD check cadence</span>
+          <span id="cdx-vadcd-val">2</span>
+          <input type="range" id="cdx-s-vadcd" min="1" max="6" value="2" />
+        </div>
+
         <!-- Behavioral Modes (power user) -->
         <div class="cdx-modes-section">
           <div class="cdx-field-bar" style="margin-top:14px;">
@@ -332,6 +345,9 @@ function createPanel() {
           <input type="text" id="cdx-me-name" class="cdx-field-input" placeholder="Mode name (e.g. Public Persona)" />
           <textarea id="cdx-me-express" class="cdx-field-input" rows="2" placeholder="How they act in this mode…"></textarea>
           <textarea id="cdx-me-suppress" class="cdx-field-input" rows="2" placeholder="What the AI should NOT assume…"></textarea>
+          <div class="cdx-hint">Disposition (optional): threads matching <b>fixates</b> linger &amp; build pressure; <b>ignores</b> fade fast.</div>
+          <input type="text" id="cdx-me-fixates" class="cdx-field-input" placeholder="Fixates on (comma-separated: the locked door, her past)" />
+          <input type="text" id="cdx-me-ignores" class="cdx-field-input" placeholder="Ignores (comma-separated: phone, small talk)" />
           <div class="cdx-qa-actions">
             <label class="cdx-check"><input type="checkbox" id="cdx-me-default" /> Default</label>
             <button class="cdx-btn-primary cdx-btn-sm" id="cdx-me-save">Save</button>
@@ -502,6 +518,17 @@ function bindEvents() {
         saveSettings();
         buildAndInject();
     });
+    $(document).on('change', '#cdx-s-vad', function () {
+        getSettings().vad_enabled = this.checked;
+        saveSettings();
+        renderVad();
+    });
+    $(document).on('input', '#cdx-s-vadcd', function () {
+        const v = parseInt(this.value);
+        getSettings().vad_cooldown = v;
+        $('#cdx-vadcd-val').text(v);
+        saveSettings();
+    });
     $(document).on('click', '#cdx-clear-memories', () => {
         if (!confirm('Clear ALL memories? Cannot be undone.')) return;
         const state = getChatState();
@@ -568,6 +595,31 @@ function renderPanel() {
 
     renderMemories();
     renderThreads();
+    renderVad();
+}
+
+// ─── VAD Readout ─────────────────────────────────────────────────────────────
+
+function renderVad() {
+    const settings = getSettings();
+    const vad = getChatState().vad || { valence: 0, arousal: 0, dominance: 0, label: 'neutral' };
+    $('#cdx-vad-section').toggle(settings.vad_enabled !== false);
+    $('#cdx-vad-label').html(vad.label ? `· ${xss(vad.label)}` : '');
+
+    const row = (name, val) => {
+        const v = Number(val) || 0;
+        const pct = ((v + 2) / 4) * 100;
+        const sign = v > 0 ? `+${v}` : `${v}`;
+        return `<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:0.8em;">
+            <span style="width:62px;opacity:0.65;">${name}</span>
+            <span style="position:relative;flex:1;height:4px;background:rgba(255,255,255,0.12);border-radius:2px;">
+              <span style="position:absolute;top:0;left:50%;width:1px;height:4px;background:rgba(255,255,255,0.25);"></span>
+              <span style="position:absolute;top:-2px;left:calc(${pct}% - 4px);width:8px;height:8px;border-radius:50%;background:#9ad;"></span>
+            </span>
+            <span style="width:22px;text-align:right;opacity:0.55;">${sign}</span>
+        </div>`;
+    };
+    $('#cdx-vad-bars').html(row('valence', vad.valence) + row('arousal', vad.arousal) + row('dominance', vad.dominance));
 }
 
 // ─── Memory Rendering ────────────────────────────────────────────────────────
@@ -680,12 +732,16 @@ function renderThreads() {
         const sm = THREAD_STATUS_META[t.status] || THREAD_STATUS_META.building;
         const isPaused = t.status === 'paused';
         const star = t.priority === 'primary' ? '★ ' : '';
+        const heat = Math.max(0, Math.min(5, t.heat ?? 0));
+        const heatPips = '●'.repeat(heat) + '○'.repeat(5 - heat);
+        const silent = t.silent ?? 0;
         return `
         <div class="cdx-mem-item" style="${isPaused ? 'opacity:0.5;' : ''}">
             <button class="cdx-mem-weight-btn cdx-thr-status-btn" data-id="${t.id}" title="${sm.label} — tap to cycle · pause via ✎">${sm.icon}</button>
             <div class="cdx-mem-body">
                 <div class="cdx-mem-text"><b>${star}${xss(t.name)}</b>${t.description ? ' — ' + xss(t.description) : ''}</div>
                 <span class="cdx-mem-type" style="color:${sm.color}">${sm.label}</span>
+                <span class="cdx-dim" style="font-size:0.72em;margin-left:6px;letter-spacing:1px;" title="heat ${heat}/5 · ${silent} turn(s) since touched">${heatPips}</span>
             </div>
             <div class="cdx-mem-actions">
                 <button class="cdx-icon-btn cdx-thr-resolve" data-id="${t.id}" title="Resolve (archive)">✓</button>
@@ -756,6 +812,9 @@ function renderSettings() {
     $('#cdx-maxmem-val').text(settings.maxMemoriesInject || 5);
     $('#cdx-s-depth').val(settings.injectionDepth || 2);
     $('#cdx-depth-val').text(settings.injectionDepth || 2);
+    $('#cdx-s-vad').prop('checked', settings.vad_enabled !== false);
+    $('#cdx-s-vadcd').val(settings.vad_cooldown || 2);
+    $('#cdx-vadcd-val').text(settings.vad_cooldown || 2);
     $('#cdx-template-select').val('');
     renderModes();
 }
@@ -774,6 +833,12 @@ function renderModes() {
 
     const html = states.map(s => {
         const isActive = active && s.id === active.id;
+        const lean = s.leanings || {};
+        const fx = (lean.fixates || []).filter(Boolean);
+        const ig = (lean.ignores || []).filter(Boolean);
+        const leanHint = (fx.length || ig.length)
+            ? `<div class="cdx-hint" style="margin:1px 0 4px 8px;font-size:0.72em;">${fx.length ? '↑ ' + xss(fx.join(', ')) : ''}${fx.length && ig.length ? ' · ' : ''}${ig.length ? '↓ ' + xss(ig.join(', ')) : ''}</div>`
+            : '';
         return `
         <div class="cdx-mode-item ${isActive ? 'cdx-mode-active' : ''}">
             <button class="cdx-mode-activate" data-id="${s.id}" title="Tap to activate">
@@ -783,7 +848,7 @@ function renderModes() {
                 <button class="cdx-icon-btn cdx-mode-edit" data-id="${s.id}">✎</button>
                 <button class="cdx-icon-btn cdx-mode-delete" data-id="${s.id}">🗑</button>
             </div>
-        </div>`;
+        </div>${leanHint}`;
     }).join('');
 
     const deactivate = active
@@ -797,6 +862,8 @@ function openModeEditor(state) {
     $('#cdx-me-name').val(state?.name || '');
     $('#cdx-me-express').val(state?.express || '');
     $('#cdx-me-suppress').val(state?.suppress || '');
+    $('#cdx-me-fixates').val((state?.leanings?.fixates || []).join(', '));
+    $('#cdx-me-ignores').val((state?.leanings?.ignores || []).join(', '));
     $('#cdx-me-default').prop('checked', state?.is_default || false);
     $('#cdx-mode-editor').data('editing-id', state?.id || null).slideDown(150);
 }
@@ -812,12 +879,15 @@ function saveModeFromEditor() {
     const isDefault = $('#cdx-me-default').prop('checked');
     const editingId = $('#cdx-mode-editor').data('editing-id');
 
+    const csv = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+    const leanings = { fixates: csv($('#cdx-me-fixates').val()), ignores: csv($('#cdx-me-ignores').val()) };
+
     if (!name) { toastr.warning('Mode needs a name'); return; }
 
     if (editingId) {
-        updateState(editingId, { name, express, suppress, is_default: isDefault });
+        updateState(editingId, { name, express, suppress, is_default: isDefault, leanings });
     } else {
-        const s = addState(name, express, suppress, isDefault);
+        const s = addState(name, express, suppress, isDefault, leanings);
         if (s && isDefault) setActiveState(s.id);
     }
 
