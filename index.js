@@ -20,6 +20,8 @@ import { initPanel, destroyPanel, showNudge } from './src/panel.js';
 import { registerAPI, unregisterAPI } from './src/api.js';
 import { maintainThreads, getThreads } from './src/threads.js';
 import { runVadEvaluation } from './src/vad-evaluator.js';
+import { runLexiconBridge } from './src/lexicon-bridge.js';
+import { importCharacterStates, exportCharacterStates } from './src/state-import.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  EXTENSION SETTINGS DRAWER
@@ -42,6 +44,14 @@ function addExtensionSettingsPanel() {
           Codex tracks character memories, evolution, and behavioral modes.
           Open the 📋 button to manage character data.
         </p>
+        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="menu_button" id="codex-import-states" title="Import behavioral states (JSON) for the loaded character">⬆ Import States</button>
+          <button class="menu_button" id="codex-export-states" title="Export the loaded character's states to a JSON file">⬇ Export States</button>
+          <input type="file" id="codex-import-states-file" accept=".json,application/json" style="display:none;" />
+        </div>
+        <p style="margin:4px 0 0;opacity:0.55;font-size:0.78em;line-height:1.35;">
+          Import replaces the current character's modes (open their chat first).
+        </p>
       </div>
     </div>`;
 
@@ -63,6 +73,47 @@ function addExtensionSettingsPanel() {
             unregisterAPI();
         }
     });
+
+    // ── Import / Export states (portable JSON) ───────────────────────────────
+    $('#codex-import-states').on('click', () => $('#codex-import-states-file').click());
+
+    $('#codex-import-states-file').on('change', function () {
+        const file = this.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const res = importCharacterStates(String(ev.target?.result || ''), 'replace');
+            if (res.success) {
+                buildAndInject();
+                // force a clean panel re-render so the new modes show immediately
+                try { destroyPanel(); initPanel(); } catch (e) { /* panel may be closed */ }
+                toastr.success(`Imported ${res.count} state${res.count === 1 ? '' : 's'}${res.name ? ` — ${res.name}` : ''}`, 'Codex');
+            } else {
+                toastr.error(res.error || 'Import failed', 'Codex', { timeOut: 7000 });
+            }
+        };
+        reader.readAsText(file);
+        this.value = '';   // allow re-importing the same file
+    });
+
+    $('#codex-export-states').on('click', () => {
+        try {
+            const json = exportCharacterStates();
+            const ctx = getContext();
+            const safe = (ctx?.name2 || 'character').replace(/[^a-z0-9_-]+/gi, '_');
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${safe}.codex-states.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (e) {
+            toastr.error(`Export failed: ${e.message}`, 'Codex', { timeOut: 7000 });
+        }
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -77,6 +128,12 @@ async function onMessageReceived() {
     const hasChat = !!ctx?.chat?.length;
     const lastMsg = hasChat ? ctx.chat[ctx.chat.length - 1] : null;
     const msgIndex = hasChat ? ctx.chat.length - 1 : 0;
+
+    // ── Lexicon bridge ───────────────────────────────────────────────────────
+    // Sync the active era → Codex state, and convert freshly-fired Lexicon
+    // reveals into one-shot directives. Runs before buildAndInject so its
+    // changes are reflected this cycle. No-ops if Lexicon isn't present.
+    await runLexiconBridge();
 
     // ── Ledger upkeep ────────────────────────────────────────────────────────
     // Reinforce threads the latest exchange touched; age the rest so neglected
@@ -178,6 +235,9 @@ jQuery(async () => {
                 const text = (c?.chat || []).slice(-2).map(m => m?.mes || '').join('\n');
                 return maintainThreads(text, (c?.chat?.length || 1) - 1);
             },
+            bridge: () => runLexiconBridge(),
+            exportStates: () => exportCharacterStates(),
+            importStates: (json) => importCharacterStates(json, 'replace'),
         };
 
         console.log(`[Codex] ✅ v${EXT_VERSION} ready`);
