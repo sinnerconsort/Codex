@@ -85,9 +85,14 @@ function addExtensionSettingsPanel() {
             const res = importCharacterStates(String(ev.target?.result || ''), 'replace');
             if (res.success) {
                 buildAndInject();
-                // force a clean panel re-render so the new modes show immediately
-                try { destroyPanel(); initPanel(); } catch (e) { /* panel may be closed */ }
-                toastr.success(`Imported ${res.count} state${res.count === 1 ? '' : 's'}${res.name ? ` — ${res.name}` : ''}`, 'Codex');
+                // NOTE: do NOT destroyPanel()/initPanel() here — re-running the panel's
+                // bindEvents() double-binds its delegated document handlers (the panel
+                // would then open and instantly close). togglePanel() re-renders on open,
+                // so the new modes appear next time the panel is opened.
+                toastr.success(
+                    `Imported ${res.count} state${res.count === 1 ? '' : 's'}${res.name ? ` — ${res.name}` : ''}. Open the Codex panel ▸ Modes to see them.`,
+                    'Codex'
+                );
             } else {
                 toastr.error(res.error || 'Import failed', 'Codex', { timeOut: 7000 });
             }
