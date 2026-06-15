@@ -13,12 +13,13 @@ import {
 } from '../../../../script.js';
 
 import { EXT_ID, EXT_DISPLAY_NAME, EXT_VERSION } from './src/config.js';
-import { getSettings, sanitizeSettings, sanitizeChatState, loadChatData } from './src/state.js';
+import { getSettings, sanitizeSettings, sanitizeChatState, loadChatData, getChatState } from './src/state.js';
 import { buildAndInject, clearInjection } from './src/injection.js';
 import { detectNudgeSignals, draftMemoryFromContext } from './src/memories.js';
 import { initPanel, destroyPanel, showNudge } from './src/panel.js';
 import { registerAPI, unregisterAPI } from './src/api.js';
 import { maintainThreads, getThreads } from './src/threads.js';
+import { runVadEvaluation } from './src/vad-evaluator.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  EXTENSION SETTINGS DRAWER
@@ -94,6 +95,19 @@ async function onMessageReceived() {
     // the freshly-aged ledger.
     buildAndInject();
 
+    // ── VAD emotional evaluator ──────────────────────────────────────────────
+    // Background judgment of how the focal character feels. AI messages only,
+    // cooldown-gated. Fire-and-forget; the evaluator self-guards against overlap
+    // and fails safe to no change. Read by Voice (tone) and the ledger (weight).
+    if (settings.vad_enabled !== false && lastMsg && !lastMsg.is_user) {
+        const lastEval = getChatState().vad?.updated_at;
+        const sinceEval = (typeof lastEval === 'number') ? msgIndex - lastEval : Infinity;
+        if (sinceEval >= (settings.vad_cooldown ?? 2)) {
+            const sceneText = ctx.chat.slice(-3).map(m => m?.mes || '').join('\n');
+            runVadEvaluation(sceneText, msgIndex);
+        }
+    }
+
     // ── Memory nudge ─────────────────────────────────────────────────────────
     if (!settings.enableNudge) return;
     if (!lastMsg || lastMsg.is_user) return; // Only scan AI responses
@@ -158,6 +172,7 @@ jQuery(async () => {
                 name: t.name, status: t.status, priority: t.priority,
                 heat: t.heat ?? 0, silent: t.silent ?? 0,
             })),
+            vad: () => getChatState().vad,
             maintain: () => {
                 const c = getContext();
                 const text = (c?.chat || []).slice(-2).map(m => m?.mes || '').join('\n');
