@@ -1,4 +1,5 @@
 import { getContext } from '../../../../extensions.js';
+import { eventSource, event_types } from '../../../../../script.js';
 import {
     getSettings, getChatState, sanitizeChatState, getCharacterKey,
     saveSettings, saveChatData,
@@ -29,6 +30,26 @@ export function initPanel() {
     createFAB();
     createPanel();
     bindEvents();
+    bindLiveRefresh();
+}
+
+// Repaint the auto-updating readouts (VAD meters, thread heat/quiet, memories)
+// as messages arrive — but ONLY while the panel is open, and ONLY the read-only
+// lists, never the editable textareas (so it can't clobber what you're typing).
+// VAD is a background call that resolves a beat late, so we also nudge once on a
+// short delay to catch its result rather than show last turn's value.
+let liveRefreshBound = false;
+function bindLiveRefresh() {
+    if (liveRefreshBound) return;
+    liveRefreshBound = true;
+    const repaint = () => {
+        if (!$('#codex-panel').is(':visible')) return;
+        try { renderMemories(); renderThreads(); renderVad(); } catch (e) { /* non-critical */ }
+    };
+    eventSource.on(event_types.MESSAGE_RECEIVED, () => {
+        repaint();                 // immediate: thread heat/quiet move now
+        setTimeout(repaint, 2500); // delayed: catch the async VAD result
+    });
 }
 
 // Pill-shaped, labelled chips for the quick-add forms. Injected at runtime so
@@ -55,7 +76,11 @@ function injectPanelChipStyles() {
   border-color: rgba(138,126,184,0.85);
   color: #fff; font-weight: 600;
   box-shadow: inset 0 0 0 1px rgba(138,126,184,0.5);
-}`;
+}
+/* style.css hides row actions until :hover — invisible on touch. Keep them
+   visible so edit/delete/resolve are reachable on mobile. */
+.codex-panel .cdx-mem-actions { opacity: 0.65; }
+.codex-panel .cdx-mem-item:hover .cdx-mem-actions { opacity: 1; }`;
     const style = document.createElement('style');
     style.id = 'codex-panel-chipstyle';
     style.textContent = css;
