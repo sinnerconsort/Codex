@@ -22,6 +22,7 @@ import { maintainThreads, getThreads } from './src/threads.js';
 import { runVadEvaluation } from './src/vad-evaluator.js';
 import { runLexiconBridge } from './src/lexicon-bridge.js';
 import { importCharacterStates, exportCharacterStates } from './src/state-import.js';
+import { initInspector, destroyInspector, refreshInspector } from './src/inspector.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  EXTENSION SETTINGS DRAWER
@@ -42,7 +43,7 @@ function addExtensionSettingsPanel() {
         </label>
         <p style="margin:6px 0 0;opacity:0.7;font-size:0.85em;line-height:1.4;">
           Codex tracks character memories, evolution, and behavioral modes.
-          Open the 📋 button to manage character data.
+          Open the 📋 button to manage character data, or the 🔍 button to see what it's tracking.
         </p>
         <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
           <button class="menu_button" id="codex-import-states" title="Import behavioral states (JSON) for the loaded character">⬆ Import States</button>
@@ -63,6 +64,7 @@ function addExtensionSettingsPanel() {
         import('./src/state.js').then(m => m.saveSettings());
         if (s.enabled) {
             initPanel();
+            initInspector();
             loadChatData();
             sanitizeChatState();
             buildAndInject();
@@ -70,6 +72,7 @@ function addExtensionSettingsPanel() {
         } else {
             clearInjection();
             destroyPanel();
+            destroyInspector();
             unregisterAPI();
         }
     });
@@ -170,6 +173,10 @@ async function onMessageReceived() {
         }
     }
 
+    // ── Inspector ────────────────────────────────────────────────────────────
+    // Keep the read-only view live if the user has it open. No-op when closed.
+    refreshInspector();
+
     // ── Memory nudge ─────────────────────────────────────────────────────────
     if (!settings.enableNudge) return;
     if (!lastMsg || lastMsg.is_user) return; // Only scan AI responses
@@ -208,6 +215,7 @@ jQuery(async () => {
         }
 
         initPanel();
+        initInspector();
 
         const ctx = getContext();
         if (ctx?.chat?.length > 0) {
@@ -222,13 +230,15 @@ jQuery(async () => {
             loadChatData();
             sanitizeChatState();
             buildAndInject();
+            refreshInspector();
         });
 
         registerAPI();
 
         // Mobile/no-console peek: run `javascript:Codex.threads()` in the address
         // bar to see each thread's status/heat/silence, or Codex.maintain() to
-        // force a maintenance pass against the last exchange.
+        // force a maintenance pass against the last exchange. Codex.inspect()
+        // toggles the on-screen Inspector (same as the 🔍 button).
         window.Codex = {
             threads: () => getThreads().map(t => ({
                 name: t.name, status: t.status, priority: t.priority,
@@ -243,6 +253,7 @@ jQuery(async () => {
             bridge: () => runLexiconBridge(),
             exportStates: () => exportCharacterStates(),
             importStates: (json) => importCharacterStates(json, 'replace'),
+            inspect: () => { try { destroyInspector(); initInspector(); } catch {} },
         };
 
         console.log(`[Codex] ✅ v${EXT_VERSION} ready`);
