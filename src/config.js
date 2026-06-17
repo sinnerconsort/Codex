@@ -235,6 +235,10 @@ export const DEFAULT_THREAD = {
     description: '',
     priority: 'secondary',
     created_at: null,
+    // v1.4 stakes
+    kind: 'plot',          // 'plot' | 'stake'
+    direction: 'neutral',  // 'toward' | 'against' | 'neutral'  (stakes only)
+    holder: '',            // who the stake belongs to; '' = the focal character
 };
 
 // ─── Thread Metadata (v1.2) ──────────────────────────────────────────────────
@@ -261,6 +265,35 @@ export const THREAD_STATUS_CYCLE = ['building', 'escalating', 'climax'];
 export const THREAD_PRIORITY_META = {
     primary:   { label: 'Primary',   icon: '★' },
     secondary: { label: 'Secondary', icon: '○' },
+};
+
+// ─── Thread Kind & Direction (v1.4 — stakes) ─────────────────────────────────
+// A thread is either a PLOT line (something the world keeps moving — ownerless,
+// the default) or a STAKE (something a *character* holds important). A stake
+// also carries a DIRECTION: was the stake recently moved toward (honored) or
+// against (threatened)? Direction steers how a hot stake reads to the model.
+// Plot threads ignore direction entirely (they stay 'neutral').
+
+export const THREAD_KINDS = {
+    PLOT:  'plot',
+    STAKE: 'stake',
+};
+
+export const THREAD_KIND_META = {
+    plot:  { label: 'Plot',  icon: '●', color: '#8a93b8', desc: 'A story line the world keeps moving' },
+    stake: { label: 'Stake', icon: '◆', color: '#8a7eb8', desc: 'Something a character holds important' },
+};
+
+export const THREAD_DIRECTIONS = {
+    TOWARD:  'toward',
+    AGAINST: 'against',
+    NEUTRAL: 'neutral',
+};
+
+export const THREAD_DIRECTION_META = {
+    toward:  { label: 'Toward',  icon: '↗', color: '#7a9e7e', desc: 'Lately honored / moved toward' },
+    against: { label: 'Against', icon: '↘', color: '#c45c5c', desc: 'Lately threatened / moved against' },
+    neutral: { label: 'Neutral', icon: '·', color: '#888888', desc: 'No recent pressure either way' },
 };
 
 export const DEFAULT_SETTINGS = {

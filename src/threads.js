@@ -1,5 +1,5 @@
 import { getChatState, generateId, saveChatData } from './state.js';
-import { THREAD_STATUSES, THREAD_STATUS_CYCLE } from './config.js';
+import { THREAD_STATUSES, THREAD_STATUS_CYCLE, THREAD_KINDS, THREAD_DIRECTIONS } from './config.js';
 import { getActiveState } from './states.js';
 
 const MAX_THREADS = 12;
@@ -36,18 +36,50 @@ const DISPOSITION = {
     IGNORE_FACTOR:      2.0,  // active disposition ignores this thread → fades fast
 };
 
+// ─── Shape normalization ─────────────────────────────────────────────────────
+// Backfill fields onto threads created by older versions, in place, WITHOUT
+// saving (reads stay cheap — the next maintainThreads pass persists naturally).
+// Covers both the v1.3 ledger fields and the v1.4 stakes fields, so old chats
+// light up correctly the moment they're read by the panel, injection, or API.
+// Returns true if anything was added (callers that already save can OR this in).
+function ensureThreadShape(t) {
+    if (!t || typeof t !== 'object') return false;
+    let changed = false;
+    if (typeof t.heat !== 'number')        { t.heat = 0; changed = true; }
+    if (typeof t.silent !== 'number')      { t.silent = 0; changed = true; }
+    if (typeof t.decay_accum !== 'number') { t.decay_accum = t.silent || 0; changed = true; }
+    if (t.kind !== THREAD_KINDS.STAKE && t.kind !== THREAD_KINDS.PLOT) { t.kind = THREAD_KINDS.PLOT; changed = true; }
+    if (t.direction !== THREAD_DIRECTIONS.TOWARD &&
+        t.direction !== THREAD_DIRECTIONS.AGAINST &&
+        t.direction !== THREAD_DIRECTIONS.NEUTRAL) { t.direction = THREAD_DIRECTIONS.NEUTRAL; changed = true; }
+    if (typeof t.holder !== 'string')      { t.holder = ''; changed = true; }
+    // Plot threads never carry stake semantics — keep them clean.
+    if (t.kind === THREAD_KINDS.PLOT) {
+        if (t.direction !== THREAD_DIRECTIONS.NEUTRAL) { t.direction = THREAD_DIRECTIONS.NEUTRAL; changed = true; }
+        if (t.holder !== '') { t.holder = ''; changed = true; }
+    }
+    return changed;
+}
+
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
 /**
  * Add a new plot thread to the current chat.
  */
-export function addThread(name, description = '', priority = 'secondary', status = THREAD_STATUSES.BUILDING) {
+export function addThread(name, description = '', priority = 'secondary', status = THREAD_STATUSES.BUILDING, opts = {}) {
     const state = getChatState();
     if (!Array.isArray(state.threads)) state.threads = [];
 
     if (state.threads.length >= MAX_THREADS) {
         return null; // Caller should toast — too many open threads is its own problem
     }
+
+    const kind = opts.kind === THREAD_KINDS.STAKE ? THREAD_KINDS.STAKE : THREAD_KINDS.PLOT;
+    const isStake = kind === THREAD_KINDS.STAKE;
+    const direction = isStake && (opts.direction === THREAD_DIRECTIONS.TOWARD || opts.direction === THREAD_DIRECTIONS.AGAINST)
+        ? opts.direction
+        : THREAD_DIRECTIONS.NEUTRAL;
+    const holder = isStake ? String(opts.holder || '').trim() : '';
 
     const thread = {
         id: generateId('thr'),
@@ -56,6 +88,10 @@ export function addThread(name, description = '', priority = 'secondary', status
         status,
         priority,
         created_at: new Date().toISOString(),
+        // v1.4 stakes
+        kind,
+        direction,
+        holder,
         // v1.3 ledger fields
         heat: 0,
         silent: 0,
@@ -81,6 +117,22 @@ export function updateThread(threadId, updates) {
     if (updates.description !== undefined) thread.description = updates.description.trim();
     if (updates.status !== undefined) thread.status = updates.status;
     if (updates.priority !== undefined) thread.priority = updates.priority;
+
+    // v1.4 stakes
+    if (updates.kind !== undefined) {
+        thread.kind = updates.kind === THREAD_KINDS.STAKE ? THREAD_KINDS.STAKE : THREAD_KINDS.PLOT;
+    }
+    if (updates.direction !== undefined) {
+        thread.direction = (updates.direction === THREAD_DIRECTIONS.TOWARD || updates.direction === THREAD_DIRECTIONS.AGAINST)
+            ? updates.direction
+            : THREAD_DIRECTIONS.NEUTRAL;
+    }
+    if (updates.holder !== undefined) thread.holder = String(updates.holder).trim();
+    // A plot thread can't carry stake semantics — scrub them if kind flipped back.
+    if (thread.kind === THREAD_KINDS.PLOT) {
+        thread.direction = THREAD_DIRECTIONS.NEUTRAL;
+        thread.holder = '';
+    }
 
     // A manual touch counts as reinforcement — warm it and reset the clock.
     thread.silent = 0;
@@ -136,7 +188,9 @@ export function resolveThread(threadId) {
 
 export function getThreads() {
     const state = getChatState();
-    return [...(state.threads || [])];
+    const list = state.threads || [];
+    list.forEach(ensureThreadShape);   // lazy backfill (no save)
+    return [...list];
 }
 
 /**
@@ -150,6 +204,7 @@ export function getInjectableThreads(maxCount = 5) {
 
     return (state.threads || [])
         .filter(t => t.status !== THREAD_STATUSES.PAUSED && t.status !== THREAD_STATUSES.RESOLVED)
+        .map(t => { ensureThreadShape(t); return t; })   // lazy backfill (no save)
         .sort((a, b) => {
             const pa = a.priority === 'primary' ? 1 : 0;
             const pb = b.priority === 'primary' ? 1 : 0;
@@ -241,10 +296,8 @@ export function maintainThreads(text = '', msgIndex = 0) {
     for (const t of state.threads) {
         if (t.status === THREAD_STATUSES.RESOLVED) continue;
 
-        // Backfill ledger fields for threads created before v1.3 / first run.
-        if (typeof t.heat !== 'number') { t.heat = 0; changed = true; }
-        if (typeof t.silent !== 'number') { t.silent = 0; changed = true; }
-        if (typeof t.decay_accum !== 'number') { t.decay_accum = t.silent || 0; changed = true; }
+        // Backfill ledger + stakes fields for threads created before this version.
+        if (ensureThreadShape(t)) changed = true;
         if (t.created_msg == null) { t.created_msg = msgIndex; changed = true; }
 
         const mentioned = lower && threadMentioned(t, lower);

@@ -16,6 +16,7 @@ import {
     EXT_DISPLAY_NAME, MEMORY_TYPE_META, MEMORY_WEIGHT_META,
     STATE_TEMPLATES,
     THREAD_STATUS_META, THREAD_STATUS_CYCLE, THREAD_PRIORITY_META,
+    THREAD_KINDS, THREAD_KIND_META, THREAD_DIRECTIONS, THREAD_DIRECTION_META,
 } from './config.js';
 
 let editingMemory = null;
@@ -286,6 +287,22 @@ function createPanel() {
       <div class="cdx-quick-add" id="cdx-thr-add" style="display:none;">
         <input type="text" id="cdx-ta-name" class="cdx-field-input" placeholder="Thread name (e.g. The missing heir)" />
         <textarea id="cdx-ta-desc" rows="2" class="cdx-field-input" placeholder="What's this thread about? Where could it go?"></textarea>
+
+        <!-- Kind: plot line vs character stake -->
+        <div class="cdx-qa-row" style="margin-top:4px;">
+          <span class="cdx-field-label" style="opacity:0.6;">Kind</span>
+          <div class="cdx-qa-chips" id="cdx-ta-kind-chips"></div>
+        </div>
+
+        <!-- Stake-only: who holds it + which way it's been pushed lately -->
+        <div id="cdx-ta-stake-fields" style="display:none;">
+          <input type="text" id="cdx-ta-holder" class="cdx-field-input" placeholder="Who holds this? (blank = the main character)" />
+          <div class="cdx-qa-row" style="margin-top:4px;">
+            <span class="cdx-field-label" style="opacity:0.6;">Lately</span>
+            <div class="cdx-qa-chips" id="cdx-ta-dir-chips"></div>
+          </div>
+        </div>
+
         <div class="cdx-qa-row">
           <div class="cdx-qa-chips" id="cdx-ta-status-chips"></div>
           <div class="cdx-qa-actions">
@@ -433,6 +450,12 @@ function bindEvents() {
     $(document).on('click', '#cdx-add-thread', () => openThreadAdd(null));
     $(document).on('click', '#cdx-ta-save', saveFromThreadAdd);
     $(document).on('click', '#cdx-ta-cancel', closeThreadAdd);
+
+    // Picking the Kind reveals/hides the stake-only fields (holder + direction).
+    $(document).on('click', '.cdx-kind-chip', function () {
+        const isStake = $(this).data('kind') === THREAD_KINDS.STAKE;
+        $('#cdx-ta-stake-fields').toggle(!!isStake);
+    });
 
     // Tap status icon to cycle building → escalating → climax
     $(document).on('click', '.cdx-thr-status-btn', function () {
@@ -735,13 +758,29 @@ function renderThreads() {
         const heat = Math.max(0, Math.min(5, t.heat ?? 0));
         const heatPips = '●'.repeat(heat) + '○'.repeat(5 - heat);
         const silent = t.silent ?? 0;
+
+        // v1.4 stakes: show a ◆ badge (with holder) and, if pushed lately, a direction arrow.
+        const isStake = t.kind === THREAD_KINDS.STAKE;
+        const km = THREAD_KIND_META[t.kind] || THREAD_KIND_META.plot;
+        const dm = THREAD_DIRECTION_META[t.direction] || THREAD_DIRECTION_META.neutral;
+        const stakeBadge = isStake
+            ? `<span class="cdx-mem-type" style="color:${km.color}" title="${km.desc}">${km.icon} ${xss(t.holder || 'stake')}</span>`
+            : '';
+        const dirBadge = (isStake && t.direction !== THREAD_DIRECTIONS.NEUTRAL)
+            ? `<span class="cdx-mem-type" style="color:${dm.color}" title="${dm.desc}">${dm.icon} ${dm.label}</span>`
+            : '';
+        // Silence is now visible text, not tooltip-only (mobile has no hover).
+        const quiet = silent > 0
+            ? `<span class="cdx-dim" style="font-size:0.72em;margin-left:6px;">· ${silent} quiet</span>`
+            : '';
+
         return `
         <div class="cdx-mem-item" style="${isPaused ? 'opacity:0.5;' : ''}">
             <button class="cdx-mem-weight-btn cdx-thr-status-btn" data-id="${t.id}" title="${sm.label} — tap to cycle · pause via ✎">${sm.icon}</button>
             <div class="cdx-mem-body">
                 <div class="cdx-mem-text"><b>${star}${xss(t.name)}</b>${t.description ? ' — ' + xss(t.description) : ''}</div>
-                <span class="cdx-mem-type" style="color:${sm.color}">${sm.label}</span>
-                <span class="cdx-dim" style="font-size:0.72em;margin-left:6px;letter-spacing:1px;" title="heat ${heat}/5 · ${silent} turn(s) since touched">${heatPips}</span>
+                ${stakeBadge}${dirBadge}<span class="cdx-mem-type" style="color:${sm.color}">${sm.label}</span>
+                <span class="cdx-dim" style="font-size:0.72em;margin-left:6px;letter-spacing:1px;" title="heat ${heat}/5 · ${silent} turn(s) since touched">${heatPips}</span>${quiet}
             </div>
             <div class="cdx-mem-actions">
                 <button class="cdx-icon-btn cdx-thr-resolve" data-id="${t.id}" title="Resolve (archive)">✓</button>
@@ -765,6 +804,29 @@ function openThreadAdd(thread) {
         }).join('');
 
     $('#cdx-ta-status-chips').html(chips);
+
+    // Kind chips (plot / stake)
+    const curKind = thread?.kind === THREAD_KINDS.STAKE ? THREAD_KINDS.STAKE : THREAD_KINDS.PLOT;
+    const kindChips = Object.entries(THREAD_KIND_META).map(([k, v]) => {
+        const active = curKind === k ? 'cdx-type-active' : '';
+        return `<button class="cdx-type-chip cdx-kind-chip ${active}" data-kind="${k}" title="${v.label}: ${v.desc}">${v.icon} ${v.label}</button>`;
+    }).join('');
+    $('#cdx-ta-kind-chips').html(kindChips);
+
+    // Direction chips (toward / neutral / against) — stake-only
+    const curDir = (thread?.direction === THREAD_DIRECTIONS.TOWARD || thread?.direction === THREAD_DIRECTIONS.AGAINST)
+        ? thread.direction : THREAD_DIRECTIONS.NEUTRAL;
+    const dirOrder = [THREAD_DIRECTIONS.TOWARD, THREAD_DIRECTIONS.NEUTRAL, THREAD_DIRECTIONS.AGAINST];
+    const dirChips = dirOrder.map(k => {
+        const v = THREAD_DIRECTION_META[k];
+        const active = curDir === k ? 'cdx-type-active' : '';
+        return `<button class="cdx-type-chip cdx-dir-chip ${active}" data-dir="${k}" title="${v.label}: ${v.desc}">${v.icon} ${v.label}</button>`;
+    }).join('');
+    $('#cdx-ta-dir-chips').html(dirChips);
+
+    $('#cdx-ta-holder').val(thread?.holder || '');
+    $('#cdx-ta-stake-fields').toggle(curKind === THREAD_KINDS.STAKE);
+
     $('#cdx-ta-name').val(thread?.name || '');
     $('#cdx-ta-desc').val(thread?.description || '');
     $('#cdx-ta-primary').prop('checked', thread?.priority === 'primary');
@@ -777,6 +839,8 @@ function closeThreadAdd() {
     $('#cdx-thr-add').slideUp(150);
     $('#cdx-ta-name').val('');
     $('#cdx-ta-desc').val('');
+    $('#cdx-ta-holder').val('');
+    $('#cdx-ta-stake-fields').hide();
 }
 
 function saveFromThreadAdd() {
@@ -787,10 +851,15 @@ function saveFromThreadAdd() {
     const status = $('.cdx-thr-chip.cdx-type-active').data('status') || 'building';
     const priority = $('#cdx-ta-primary').prop('checked') ? 'primary' : 'secondary';
 
+    const kind = $('.cdx-kind-chip.cdx-type-active').data('kind') || THREAD_KINDS.PLOT;
+    const isStake = kind === THREAD_KINDS.STAKE;
+    const direction = isStake ? ($('.cdx-dir-chip.cdx-type-active').data('dir') || THREAD_DIRECTIONS.NEUTRAL) : THREAD_DIRECTIONS.NEUTRAL;
+    const holder = isStake ? $('#cdx-ta-holder').val().trim() : '';
+
     if (editingThread) {
-        updateThread(editingThread.id, { name, description, status, priority });
+        updateThread(editingThread.id, { name, description, status, priority, kind, direction, holder });
     } else {
-        const created = addThread(name, description, priority, status);
+        const created = addThread(name, description, priority, status, { kind, direction, holder });
         if (!created) {
             toastr.warning('Too many open threads — resolve or delete some first');
             return;
