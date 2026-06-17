@@ -25,9 +25,41 @@ let editingMemory = null;
 
 export function initPanel() {
     if ($('#codex-fab').length) return;
+    injectPanelChipStyles();
     createFAB();
     createPanel();
     bindEvents();
+}
+
+// Pill-shaped, labelled chips for the quick-add forms. Injected at runtime so
+// style.css stays untouched. `.cdx-type-chip` in style.css is a fixed 28px
+// circle — fine for bare icons, but it crushes text labels. These rules add a
+// `.cdx-pill-chip` variant (auto-width, wraps, icon+label) and a clearer
+// active fill. Higher specificity (.cdx-qa-chips .cdx-pill-chip) guarantees the
+// override beats the base circle rule regardless of load order.
+function injectPanelChipStyles() {
+    if (document.getElementById('codex-panel-chipstyle')) return;
+    const css = `
+.cdx-chip-group { margin-top: 8px; }
+.cdx-chip-group-label {
+  font-size: 0.72em; letter-spacing: 0.06em; text-transform: uppercase;
+  opacity: 0.55; margin-bottom: 4px;
+}
+.cdx-qa-chips .cdx-pill-chip {
+  width: auto; height: auto; border-radius: 999px;
+  padding: 4px 11px; font-size: 0.8em; line-height: 1.2;
+  gap: 5px; white-space: nowrap;
+}
+.cdx-qa-chips .cdx-pill-chip.cdx-type-active {
+  background: rgba(138,126,184,0.38);
+  border-color: rgba(138,126,184,0.85);
+  color: #fff; font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(138,126,184,0.5);
+}`;
+    const style = document.createElement('style');
+    style.id = 'codex-panel-chipstyle';
+    style.textContent = css;
+    document.head.appendChild(style);
 }
 
 export function destroyPanel() {
@@ -289,27 +321,30 @@ function createPanel() {
         <textarea id="cdx-ta-desc" rows="2" class="cdx-field-input" placeholder="What's this thread about? Where could it go?"></textarea>
 
         <!-- Kind: plot line vs character stake -->
-        <div class="cdx-qa-row" style="margin-top:4px;">
-          <span class="cdx-field-label" style="opacity:0.6;">Kind</span>
+        <div class="cdx-chip-group">
+          <div class="cdx-chip-group-label">Kind</div>
           <div class="cdx-qa-chips" id="cdx-ta-kind-chips"></div>
         </div>
 
         <!-- Stake-only: who holds it + which way it's been pushed lately -->
         <div id="cdx-ta-stake-fields" style="display:none;">
-          <input type="text" id="cdx-ta-holder" class="cdx-field-input" placeholder="Who holds this? (blank = the main character)" />
-          <div class="cdx-qa-row" style="margin-top:4px;">
-            <span class="cdx-field-label" style="opacity:0.6;">Lately</span>
+          <input type="text" id="cdx-ta-holder" class="cdx-field-input" style="margin-top:8px;" placeholder="Who holds this? (blank = the main character)" />
+          <div class="cdx-chip-group">
+            <div class="cdx-chip-group-label">Lately — moved toward or against it?</div>
             <div class="cdx-qa-chips" id="cdx-ta-dir-chips"></div>
           </div>
         </div>
 
-        <div class="cdx-qa-row">
+        <!-- Status -->
+        <div class="cdx-chip-group">
+          <div class="cdx-chip-group-label">Status</div>
           <div class="cdx-qa-chips" id="cdx-ta-status-chips"></div>
-          <div class="cdx-qa-actions">
-            <label class="cdx-check" title="Primary threads get forward-motion priority"><input type="checkbox" id="cdx-ta-primary" /> ★</label>
-            <button class="cdx-btn-primary" id="cdx-ta-save">Save</button>
-            <button class="cdx-icon-btn" id="cdx-ta-cancel">✕</button>
-          </div>
+        </div>
+
+        <div class="cdx-qa-row" style="justify-content:flex-end;margin-top:10px;">
+          <label class="cdx-check" title="Primary threads get forward-motion priority"><input type="checkbox" id="cdx-ta-primary" /> ★ Primary</label>
+          <button class="cdx-btn-primary" id="cdx-ta-save">Save</button>
+          <button class="cdx-icon-btn" id="cdx-ta-cancel">✕</button>
         </div>
       </div>
 
@@ -690,7 +725,7 @@ function openQuickAdd(memory) {
 
     const typeChips = Object.entries(MEMORY_TYPE_META).map(([k, v]) => {
         const active = (memory?.type || 'trust') === k ? 'cdx-type-active' : '';
-        return `<button class="cdx-type-chip ${active}" data-type="${k}" title="${v.label}">${v.icon}</button>`;
+        return `<button class="cdx-type-chip cdx-pill-chip ${active}" data-type="${k}" title="${v.label}">${v.icon} ${v.label}</button>`;
     }).join('');
 
     $('#cdx-qa-type-chips').html(typeChips);
@@ -800,7 +835,7 @@ function openThreadAdd(thread) {
         .filter(([k]) => k !== 'resolved') // Resolving is the ✓ button, not a status pick
         .map(([k, v]) => {
             const active = (thread?.status || 'building') === k ? 'cdx-type-active' : '';
-            return `<button class="cdx-type-chip cdx-thr-chip ${active}" data-status="${k}" title="${v.label}: ${v.desc}">${v.icon}</button>`;
+            return `<button class="cdx-type-chip cdx-pill-chip cdx-thr-chip ${active}" data-status="${k}" title="${v.desc}">${v.icon} ${v.label}</button>`;
         }).join('');
 
     $('#cdx-ta-status-chips').html(chips);
@@ -809,7 +844,7 @@ function openThreadAdd(thread) {
     const curKind = thread?.kind === THREAD_KINDS.STAKE ? THREAD_KINDS.STAKE : THREAD_KINDS.PLOT;
     const kindChips = Object.entries(THREAD_KIND_META).map(([k, v]) => {
         const active = curKind === k ? 'cdx-type-active' : '';
-        return `<button class="cdx-type-chip cdx-kind-chip ${active}" data-kind="${k}" title="${v.label}: ${v.desc}">${v.icon} ${v.label}</button>`;
+        return `<button class="cdx-type-chip cdx-pill-chip cdx-kind-chip ${active}" data-kind="${k}" title="${v.desc}">${v.icon} ${v.label}</button>`;
     }).join('');
     $('#cdx-ta-kind-chips').html(kindChips);
 
@@ -820,7 +855,7 @@ function openThreadAdd(thread) {
     const dirChips = dirOrder.map(k => {
         const v = THREAD_DIRECTION_META[k];
         const active = curDir === k ? 'cdx-type-active' : '';
-        return `<button class="cdx-type-chip cdx-dir-chip ${active}" data-dir="${k}" title="${v.label}: ${v.desc}">${v.icon} ${v.label}</button>`;
+        return `<button class="cdx-type-chip cdx-pill-chip cdx-dir-chip ${active}" data-dir="${k}" title="${v.desc}">${v.icon} ${v.label}</button>`;
     }).join('');
     $('#cdx-ta-dir-chips').html(dirChips);
 
