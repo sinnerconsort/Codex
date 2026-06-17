@@ -92,10 +92,30 @@ export async function runLexiconBridge() {
         clearBridgeDirectives(cs);
 
         // ── 1) ERA SYNC ──────────────────────────────────────────────────────
-        const eraEntry = entries.find(e =>
-            String(e.title || '').startsWith(ERA_PREFIX) &&
-            Array.isArray(e.gateConditions) && e.gateConditions.some(g => g && g.met)
-        );
+        // Single-gatekeeper inversion: if Chronicler is present, IT owns which
+        // ERA is active (it holds the ladder + pointer; we only read it). The
+        // matching "ERA ▸ <Name>" Lexicon entry is selected by Chronicler's
+        // active era, and its own gateConditions are ignored for this purpose —
+        // no two-master problem. Falls back to the original gate.met behavior
+        // when Chronicler is absent, so Codex still works standalone.
+        const chronEra = (() => {
+            try {
+                const api = window.ChroniclerAPI;
+                if (!api || api.isActive?.() === false || typeof api.getActiveEra !== 'function') return null;
+                const era = api.getActiveEra();
+                return era ? String(era).trim().toLowerCase() : null;
+            } catch { return null; }
+        })();
+
+        const eraEntry = chronEra
+            ? entries.find(e =>
+                String(e.title || '').startsWith(ERA_PREFIX) &&
+                (parseEraStateName(e.title) || '').trim().toLowerCase() === chronEra
+              )
+            : entries.find(e =>
+                String(e.title || '').startsWith(ERA_PREFIX) &&
+                Array.isArray(e.gateConditions) && e.gateConditions.some(g => g && g.met)
+              );
         if (eraEntry) {
             const target = findStateByName(parseEraStateName(eraEntry.title));
             if (target && b.lastEraState !== target.id) {
