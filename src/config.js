@@ -220,12 +220,60 @@ export const DEFAULT_MEMORY = {
     timestamp: null,
 };
 
+// ─── State Kind & VAD Lean (v1.4 — face/era split) ───────────────────────────
+// A behavioral state is one of two KINDS, and only one driver may move each —
+// disjoint drivers mean no two-masters fight over the active-state slot:
+//   • FACE — a persona/mask worn moment-to-moment (Relaxed, Guarded, "The Seam",
+//     Jed / Danny / Ghost Face). Driven by emotional CONTEXT: the VAD lean below,
+//     reveal cracks, and manual taps. NEVER touched by the era bridge.
+//   • ERA  — a timeline/version card (S2 vs S6 Spike, "Big Bad"). Driven ONLY by
+//     the Chronicler/Lexicon era bridge. NEVER touched by VAD or reveals.
+// A character is normally built all-face OR all-era; only one slot is active at
+// a time, so mixing within one character isn't represented (that's the two-slot
+// upgrade, deferred). 'face' is the default so every pre-split state is unchanged.
+
+export const STATE_KINDS = {
+    FACE: 'face',
+    ERA:  'era',
+};
+
+export const STATE_KIND_META = {
+    face: { label: 'Face', icon: '🎭', desc: 'A mask worn in the moment — driven by emotional context (VAD), reveals, manual taps' },
+    era:  { label: 'Era',  icon: '📖', desc: 'A timeline/version card — driven only by the Chronicler era bridge' },
+};
+
+// A FACE may declare an optional VAD LEAN: the rough emotional region it fits.
+// Each axis is a SIGN, not a number — coarse on purpose so it's quick to set on
+// mobile and robust to the evaluator's one-step wobble. 'any' ignores that axis.
+//   neg → axis < 0   ·   neutral → axis ≈ 0   ·   pos → axis > 0   ·   any → don't care
+// The resolver scores each face by sign-match against current VAD and, with
+// hysteresis, swaps to the best fit. ERA states ignore lean entirely.
+
+export const LEAN_SIGNS = {
+    NEG:     'neg',
+    NEUTRAL: 'neutral',
+    POS:     'pos',
+    ANY:     'any',
+};
+
+export const LEAN_SIGN_META = {
+    neg:     { label: '–', desc: 'leans negative / low' },
+    neutral: { label: '0', desc: 'leans neutral / mid' },
+    pos:     { label: '+', desc: 'leans positive / high' },
+    any:     { label: '·', desc: 'ignore this axis' },
+};
+
+export const DEFAULT_LEAN = { valence: 'any', arousal: 'any', dominance: 'any' };
+
 export const DEFAULT_STATE = {
     id: '',
     name: '',
     express: '',
     suppress: '',
     is_default: false,
+    // v1.4 — face/era split
+    kind: 'face',                                                // 'face' | 'era'  (see STATE_KINDS)
+    lean: { valence: 'any', arousal: 'any', dominance: 'any' },  // FACE only; see LEAN_SIGNS
 };
 
 export const DEFAULT_THREAD = {
