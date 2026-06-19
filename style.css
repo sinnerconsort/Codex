@@ -453,3 +453,14 @@
     white-space: nowrap;
 }
 .cdx-status-hot { color: #c9b8e6; opacity: 0.95; }
+
+/* ── Width containment (mobile): nothing in a pane may outgrow the panel ──── */
+/* The flexbox min-width:auto trap lets a pane grow to its content's min-content
+   width instead of shrinking to the panel. min-width:0 pins it to panel width,
+   so width:100% inputs and wrapping hints lay out within the visible area. */
+.cdx-pane { min-width: 0; max-width: 100%; }
+.cdx-pane .cdx-hint { overflow-wrap: anywhere; }
+#cdx-mode-editor { min-width: 0; max-width: 100%; box-sizing: border-box; }
+#cdx-me-lean-wrap,
+#cdx-me-lean-wrap > div { min-width: 0; max-width: 100%; }
+#cdx-me-lean-wrap > div > span { min-width: 0; }
