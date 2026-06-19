@@ -21,6 +21,7 @@ import { registerAPI, unregisterAPI } from './src/api.js';
 import { maintainThreads, getThreads } from './src/threads.js';
 import { runVadEvaluation } from './src/vad-evaluator.js';
 import { runLexiconBridge } from './src/lexicon-bridge.js';
+import { runFaceResolver } from './src/vad-state.js';
 import { importCharacterStates, exportCharacterStates } from './src/state-import.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -139,6 +140,15 @@ async function onMessageReceived() {
     // reveals into one-shot directives. Runs before buildAndInject so its
     // changes are reflected this cycle. No-ops if Lexicon isn't present.
     await runLexiconBridge();
+
+    // ── VAD → face resolver ──────────────────────────────────────────────────
+    // Pick the behavioral FACE that best fits the current emotional state, with
+    // hysteresis (sticky: holds the current face unless a rival clearly wins and
+    // a dwell floor has passed). Stands down for era-organized characters and
+    // never stomps an active Seam hold. Runs after the bridge so era/seam wins,
+    // before buildAndInject so the chosen face is reflected this cycle. Reads the
+    // settled VAD — this turn's eval (below) lands for next turn, as it always has.
+    runFaceResolver();
 
     // ── Ledger upkeep ────────────────────────────────────────────────────────
     // Reinforce threads the latest exchange touched; age the rest so neglected
