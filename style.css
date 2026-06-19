@@ -365,3 +365,47 @@
     font-weight: 600;
 }
 .cdx-nudge-save:hover { background: rgba(138,126,184,0.2); }
+
+/* ── Tabs (Profile / Modes / Settings) ──────────────────────────────────── */
+.cdx-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 4px 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+}
+.cdx-tab {
+    flex: 1;
+    min-width: 0;
+    min-height: 38px;
+    padding: 8px 4px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #888;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+}
+.cdx-tab:hover { color: #aaa; }
+.cdx-tab-active {
+    color: #ddd;
+    border-bottom-color: rgba(138,126,184,0.85);
+}
+
+/* Panes share one scroll model and — critically — never scroll sideways.
+   overflow-x:hidden stops the mobile focus-pan that exposed the empty width. */
+.cdx-pane {
+    max-height: calc(75vh - 96px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px 14px 14px;
+    box-sizing: border-box;
+}
+/* min-width:0 lets flex children shrink instead of forcing the row wider */
+.cdx-pane .cdx-field-bar,
+.cdx-pane .cdx-qa-row,
+.cdx-pane .cdx-mode-item { min-width: 0; }
+.cdx-field-input { max-width: 100%; }
