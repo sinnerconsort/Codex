@@ -12,6 +12,7 @@ import { getActiveState, getStates, setActiveState, addState, updateState, delet
 import { buildAndInject } from './injection.js';
 import {
     getThreads, addThread, updateThread, deleteThread, resolveThread, getThreadHistory,
+    getInjectableThreads,
 } from './threads.js';
 import {
     EXT_DISPLAY_NAME, MEMORY_TYPE_META, MEMORY_WEIGHT_META,
@@ -44,7 +45,7 @@ function bindLiveRefresh() {
     liveRefreshBound = true;
     const repaint = () => {
         if (!$('#codex-panel').is(':visible')) return;
-        try { renderMemories(); renderThreads(); renderVad(); } catch (e) { /* non-critical */ }
+        try { renderMemories(); renderThreads(); renderStatus(); } catch (e) { /* non-critical */ }
     };
     eventSource.on(event_types.MESSAGE_RECEIVED, () => {
         repaint();                 // immediate: thread heat/quiet move now
@@ -285,6 +286,16 @@ function createPanel() {
         <button class="cdx-tab" data-tab="settings">Settings</button>
       </div>
 
+      <!-- ── Status strip (persistent, read-only) ── -->
+      <div class="cdx-status" id="cdx-status">
+        <div class="cdx-status-top">
+          <span class="cdx-status-mode" id="cdx-status-mode"></span>
+          <span class="cdx-dim" id="cdx-vad-label"></span>
+        </div>
+        <div id="cdx-vad-bars" class="cdx-status-vad"></div>
+        <div id="cdx-status-meta" class="cdx-status-meta"></div>
+      </div>
+
       <!-- ── Profile pane ── -->
       <div class="cdx-main cdx-pane" id="cdx-main" data-pane="profile">
 
@@ -311,12 +322,6 @@ function createPanel() {
             <button class="cdx-text-btn" id="cdx-add-thread">+ add</button>
           </div>
           <div id="cdx-thr-list" class="cdx-mem-list"></div>
-        </div>
-
-        <!-- Emotional state (VAD) -->
-        <div class="cdx-field-section" id="cdx-vad-section">
-          <div class="cdx-field-label">Emotional state <span id="cdx-vad-label" class="cdx-dim"></span></div>
-          <div id="cdx-vad-bars"></div>
         </div>
 
         <!-- Growing Toward -->
@@ -635,7 +640,7 @@ function bindEvents() {
     $(document).on('change', '#cdx-s-vad', function () {
         getSettings().vad_enabled = this.checked;
         saveSettings();
-        renderVad();
+        renderStatus();
     });
     $(document).on('input', '#cdx-s-vadcd', function () {
         const v = parseInt(this.value);
@@ -709,7 +714,7 @@ function renderPanel() {
 
     renderMemories();
     renderThreads();
-    renderVad();
+    renderStatus();
 
     switchTab('profile');   // always open on Profile
 }
@@ -727,25 +732,66 @@ function switchTab(tab) {
     $('#cdx-quick-add, #cdx-thr-add').hide();
     if (tab !== 'modes') $('#cdx-mode-editor').hide();
 
+    renderStatus();
     if (tab === 'settings') renderSettings();
     if (tab === 'modes') renderModes();
 }
 
 // ─── VAD Readout ─────────────────────────────────────────────────────────────
 
+function renderStatus() {
+    const active = getActiveState();
+    if (active) {
+        const icon = (STATE_KIND_META[active.kind] || STATE_KIND_META.face).icon;
+        $('#cdx-status-mode').html(`${icon} ${xss(active.name)}`);
+    } else {
+        $('#cdx-status-mode').html('<span class="cdx-dim">No active mode</span>');
+    }
+    renderVad();
+    renderStatusMeta(active);
+}
+
+// Compact, read-only signals: open-thread load (+ the hottest one) and the
+// active mode's disposition leanings. Hidden entirely when there's nothing to show.
+function renderStatusMeta(active) {
+    const chips = [];
+
+    let open = [];
+    try { open = getInjectableThreads(99) || []; } catch { open = []; }
+    if (open.length) {
+        const hottest = open[0]?.name ? `<span class="cdx-status-hot">${xss(open[0].name)}</span>` : '';
+        chips.push(`<span class="cdx-status-chip">🧵 ${open.length} open${hottest ? ` · ${hottest}` : ''}</span>`);
+    }
+
+    const ln = active?.leanings || {};
+    const fx = (ln.fixates || []).filter(Boolean);
+    const ig = (ln.ignores || []).filter(Boolean);
+    if (fx.length || ig.length) {
+        const parts = [];
+        if (fx.length) parts.push(`↑ ${xss(fx.join(', '))}`);
+        if (ig.length) parts.push(`↓ ${xss(ig.join(', '))}`);
+        chips.push(`<span class="cdx-status-chip">${parts.join(' · ')}</span>`);
+    }
+
+    $('#cdx-status-meta').html(chips.join('')).toggle(chips.length > 0);
+}
+
 function renderVad() {
     const settings = getSettings();
+    const enabled = settings.vad_enabled !== false;
     const vad = getChatState().vad || { valence: 0, arousal: 0, dominance: 0, label: 'neutral' };
-    $('#cdx-vad-section').toggle(settings.vad_enabled !== false);
-    $('#cdx-vad-label').html(vad.label ? `· ${xss(vad.label)}` : '');
+
+    $('#cdx-vad-bars').toggle(enabled);
+    $('#cdx-vad-label').html(enabled && vad.label ? `· ${xss(vad.label)}` : '');
+    if (!enabled) { $('#cdx-vad-bars').empty(); return; }
 
     const row = (name, val) => {
         const v = Number(val) || 0;
         const pct = ((v + 2) / 4) * 100;
         const sign = v > 0 ? `+${v}` : `${v}`;
-        return `<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:0.8em;">
-            <span style="width:62px;opacity:0.65;">${name}</span>
-            <span style="position:relative;flex:1;height:4px;background:rgba(255,255,255,0.12);border-radius:2px;">
+        return `<div style="display:flex;align-items:center;gap:8px;margin:2px 0;font-size:0.78em;">
+            <span style="width:58px;opacity:0.6;">${name}</span>
+            <span style="position:relative;flex:1;height:4px;background:rgba(255,255,255,0.12);border-radius:2px;min-width:0;">
               <span style="position:absolute;top:0;left:50%;width:1px;height:4px;background:rgba(255,255,255,0.25);"></span>
               <span style="position:absolute;top:-2px;left:calc(${pct}% - 4px);width:8px;height:8px;border-radius:50%;background:#9ad;"></span>
             </span>
@@ -1052,6 +1098,7 @@ function renderModes() {
         : '';
 
     $list.html(html + deactivate);
+    renderStatus();   // keep the status strip's active-face line in sync
 }
 
 function openModeEditor(state) {
