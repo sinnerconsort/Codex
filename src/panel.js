@@ -458,8 +458,8 @@ function createPanel() {
             </div>
           </div>
           <div class="cdx-hint">Disposition (optional): threads matching <b>fixates</b> linger &amp; build pressure; <b>ignores</b> fade fast.</div>
-          <input type="text" id="cdx-me-fixates" class="cdx-field-input" placeholder="Fixates on (comma-separated: the locked door, her past)" />
-          <input type="text" id="cdx-me-ignores" class="cdx-field-input" placeholder="Ignores (comma-separated: phone, small talk)" />
+          <input type="text" id="cdx-me-fixates" class="cdx-field-input" style="display:block;width:100%;box-sizing:border-box;margin-top:6px;" placeholder="Fixates on (comma-separated: the locked door, her past)" />
+          <input type="text" id="cdx-me-ignores" class="cdx-field-input" style="display:block;width:100%;box-sizing:border-box;margin-top:6px;" placeholder="Ignores (comma-separated: phone, small talk)" />
           <div class="cdx-qa-actions">
             <label class="cdx-check"><input type="checkbox" id="cdx-me-default" /> Default</label>
             <button class="cdx-btn-primary cdx-btn-sm" id="cdx-me-save">Save</button>
