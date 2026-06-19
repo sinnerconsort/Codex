@@ -25,6 +25,19 @@ function normalizeLean(lean) {
     return out;
 }
 
+// Disposition leanings — a SEPARATE field from the VAD `lean` above:
+//   • lean      → sign-per-axis VAD region that selects this FACE (vad-state.js)
+//   • leanings  → { fixates:[], ignores:[] } thread-pacing bias (threads.js)
+// Both may coexist on one state. Returns null when empty so we never store an
+// inert object (matches state-import's conditional include).
+function normalizeLeanings(l) {
+    if (!l || typeof l !== 'object') return null;
+    const fixates = Array.isArray(l.fixates) ? l.fixates.filter(Boolean) : [];
+    const ignores = Array.isArray(l.ignores) ? l.ignores.filter(Boolean) : [];
+    if (!fixates.length && !ignores.length) return null;
+    return { fixates, ignores };
+}
+
 /**
  * Mutate a single state in place so it always carries a valid kind + lean.
  * Returns true if anything changed (so callers can decide whether to persist).
@@ -111,7 +124,8 @@ export function setActiveState(stateId) {
 
 /**
  * Add a new behavioral state for the current character.
- * `opts` may carry { kind, lean } — defaults to a face with an 'any' lean.
+ * `opts` may carry { kind, lean, leanings } — defaults to a face with an 'any'
+ * VAD lean and no disposition leanings.
  */
 export function addState(name, express, suppress, isDefault = false, opts = {}) {
     const ctx = getContext();
@@ -121,6 +135,7 @@ export function addState(name, express, suppress, isDefault = false, opts = {}) 
     const config = getCharacterConfig(charKey);
     if (!Array.isArray(config.states)) config.states = [];
 
+    const leanings = normalizeLeanings(opts.leanings);
     const state = {
         id: generateId('state'),
         name: name.trim(),
@@ -129,6 +144,7 @@ export function addState(name, express, suppress, isDefault = false, opts = {}) 
         is_default: isDefault,
         kind: VALID_KINDS.has(opts.kind) ? opts.kind : STATE_KINDS.FACE,
         lean: normalizeLean(opts.lean),
+        ...(leanings ? { leanings } : {}),
     };
 
     // If this is default, clear other defaults
@@ -163,6 +179,11 @@ export function updateState(stateId, updates) {
     }
     if (updates.lean !== undefined) {
         state.lean = normalizeLean(updates.lean);
+    }
+    if (updates.leanings !== undefined) {
+        const nl = normalizeLeanings(updates.leanings);
+        if (nl) state.leanings = nl;
+        else delete state.leanings;          // cleared in the editor → drop it
     }
 
     if (updates.is_default) {

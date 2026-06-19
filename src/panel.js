@@ -15,7 +15,7 @@ import {
 } from './threads.js';
 import {
     EXT_DISPLAY_NAME, MEMORY_TYPE_META, MEMORY_WEIGHT_META,
-    STATE_TEMPLATES,
+    STATE_TEMPLATES, STATE_KINDS, STATE_KIND_META, LEAN_SIGN_META,
     THREAD_STATUS_META, THREAD_STATUS_CYCLE, THREAD_PRIORITY_META,
     THREAD_KINDS, THREAD_KIND_META, THREAD_DIRECTIONS, THREAD_DIRECTION_META,
 } from './config.js';
@@ -422,6 +422,28 @@ function createPanel() {
           <input type="text" id="cdx-me-name" class="cdx-field-input" placeholder="Mode name (e.g. Public Persona)" />
           <textarea id="cdx-me-express" class="cdx-field-input" rows="2" placeholder="How they act in this mode…"></textarea>
           <textarea id="cdx-me-suppress" class="cdx-field-input" rows="2" placeholder="What the AI should NOT assume…"></textarea>
+
+          <div class="cdx-field-bar" style="margin-top:8px;">
+            <span class="cdx-field-label" style="font-size:0.8em;">Mode type</span>
+            <span id="cdx-me-kind-chips" style="display:inline-flex;gap:6px;">
+              ${Object.entries(STATE_KIND_META).map(([k, v]) =>
+                `<button class="cdx-type-chip cdx-skind-chip" data-kind="${k}" title="${v.desc}" style="width:auto;padding:3px 11px;border-radius:13px;font-size:0.78em;">${v.icon} ${v.label}</button>`
+              ).join('')}
+            </span>
+          </div>
+
+          <div id="cdx-me-lean-wrap" style="margin-top:6px;">
+            <div class="cdx-hint" style="margin-bottom:2px;">Reacts to (emotional lean): the VAD region where this face surfaces. <b>·</b> ignores that axis. Sparse, distinguishing leans work best.</div>
+            ${['valence', 'arousal', 'dominance'].map(axis => `
+            <div style="display:flex;align-items:center;gap:6px;margin:3px 0;">
+              <span class="cdx-dim" style="width:74px;font-size:0.78em;text-transform:capitalize;">${axis}</span>
+              <span style="display:inline-flex;gap:5px;">
+                ${['neg', 'neutral', 'pos', 'any'].map(sign =>
+                  `<button class="cdx-type-chip cdx-lean-chip" data-axis="${axis}" data-sign="${sign}" title="${LEAN_SIGN_META[sign].desc}">${LEAN_SIGN_META[sign].label}</button>`
+                ).join('')}
+              </span>
+            </div>`).join('')}
+          </div>
           <div class="cdx-hint">Disposition (optional): threads matching <b>fixates</b> linger &amp; build pressure; <b>ignores</b> fade fast.</div>
           <input type="text" id="cdx-me-fixates" class="cdx-field-input" placeholder="Fixates on (comma-separated: the locked door, her past)" />
           <input type="text" id="cdx-me-ignores" class="cdx-field-input" placeholder="Ignores (comma-separated: phone, small talk)" />
@@ -515,6 +537,20 @@ function bindEvents() {
     $(document).on('click', '.cdx-kind-chip', function () {
         const isStake = $(this).data('kind') === THREAD_KINDS.STAKE;
         $('#cdx-ta-stake-fields').toggle(!!isStake);
+    });
+
+    // Mode editor — pick Face/Era; the VAD lean editor shows for faces only.
+    $(document).on('click', '.cdx-skind-chip', function () {
+        $('#cdx-me-kind-chips .cdx-skind-chip').removeClass('cdx-type-active');
+        $(this).addClass('cdx-type-active');
+        $('#cdx-me-lean-wrap').toggle($(this).data('kind') === STATE_KINDS.FACE);
+    });
+
+    // Mode editor — VAD lean is single-select per axis.
+    $(document).on('click', '.cdx-lean-chip', function () {
+        const axis = $(this).data('axis');
+        $(`.cdx-lean-chip[data-axis="${axis}"]`).removeClass('cdx-type-active');
+        $(this).addClass('cdx-type-active');
     });
 
     // Tap status icon to cycle building → escalating → climax
@@ -960,24 +996,41 @@ function renderModes() {
         return;
     }
 
+    const SIGN = { neg: '–', neutral: '0', pos: '+' };
     const html = states.map(s => {
         const isActive = active && s.id === active.id;
-        const lean = s.leanings || {};
-        const fx = (lean.fixates || []).filter(Boolean);
-        const ig = (lean.ignores || []).filter(Boolean);
-        const leanHint = (fx.length || ig.length)
-            ? `<div class="cdx-hint" style="margin:1px 0 4px 8px;font-size:0.72em;">${fx.length ? '↑ ' + xss(fx.join(', ')) : ''}${fx.length && ig.length ? ' · ' : ''}${ig.length ? '↓ ' + xss(ig.join(', ')) : ''}</div>`
+        const isEra = s.kind === STATE_KINDS.ERA;
+
+        // disposition leanings (fixates / ignores) — thread-pacing bias
+        const disp = s.leanings || {};
+        const fx = (disp.fixates || []).filter(Boolean);
+        const ig = (disp.ignores || []).filter(Boolean);
+
+        // VAD lean summary (faces only) — e.g. "V+ D+"
+        const vl = s.lean || {};
+        const vadParts = isEra ? [] : ['valence', 'arousal', 'dominance']
+            .filter(a => vl[a] && vl[a] !== 'any')
+            .map(a => `${a[0].toUpperCase()}${SIGN[vl[a]] || ''}`);
+
+        const hints = [];
+        if (vadParts.length) hints.push(`↻ ${vadParts.join(' ')}`);
+        if (fx.length) hints.push(`↑ ${xss(fx.join(', '))}`);
+        if (ig.length) hints.push(`↓ ${xss(ig.join(', '))}`);
+        const hintLine = hints.length
+            ? `<div class="cdx-hint" style="margin:1px 0 4px 8px;font-size:0.72em;">${hints.join(' · ')}</div>`
             : '';
+
+        const badge = isEra ? ` ${STATE_KIND_META.era.icon}` : '';
         return `
         <div class="cdx-mode-item ${isActive ? 'cdx-mode-active' : ''}">
             <button class="cdx-mode-activate" data-id="${s.id}" title="Tap to activate">
-                ${isActive ? '◉' : '○'} ${xss(s.name)}${s.is_default ? ' ★' : ''}
+                ${isActive ? '◉' : '○'} ${xss(s.name)}${s.is_default ? ' ★' : ''}${badge}
             </button>
             <div class="cdx-mode-item-actions">
                 <button class="cdx-icon-btn cdx-mode-edit" data-id="${s.id}">✎</button>
                 <button class="cdx-icon-btn cdx-mode-delete" data-id="${s.id}">🗑</button>
             </div>
-        </div>${leanHint}`;
+        </div>${hintLine}`;
     }).join('');
 
     const deactivate = active
@@ -994,6 +1047,21 @@ function openModeEditor(state) {
     $('#cdx-me-fixates').val((state?.leanings?.fixates || []).join(', '));
     $('#cdx-me-ignores').val((state?.leanings?.ignores || []).join(', '));
     $('#cdx-me-default').prop('checked', state?.is_default || false);
+
+    // Kind chips (face / era) — default face
+    const kind = (state?.kind === STATE_KINDS.ERA) ? STATE_KINDS.ERA : STATE_KINDS.FACE;
+    $('#cdx-me-kind-chips .cdx-skind-chip').removeClass('cdx-type-active');
+    $(`#cdx-me-kind-chips .cdx-skind-chip[data-kind="${kind}"]`).addClass('cdx-type-active');
+
+    // VAD lean chips — one active sign per axis, default 'any'
+    const lean = state?.lean || {};
+    ['valence', 'arousal', 'dominance'].forEach(axis => {
+        const sign = ['neg', 'neutral', 'pos', 'any'].includes(lean[axis]) ? lean[axis] : 'any';
+        $(`.cdx-lean-chip[data-axis="${axis}"]`).removeClass('cdx-type-active');
+        $(`.cdx-lean-chip[data-axis="${axis}"][data-sign="${sign}"]`).addClass('cdx-type-active');
+    });
+    $('#cdx-me-lean-wrap').toggle(kind === STATE_KINDS.FACE);
+
     $('#cdx-mode-editor').data('editing-id', state?.id || null).slideDown(150);
 }
 
@@ -1011,12 +1079,18 @@ function saveModeFromEditor() {
     const csv = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
     const leanings = { fixates: csv($('#cdx-me-fixates').val()), ignores: csv($('#cdx-me-ignores').val()) };
 
+    const kind = $('#cdx-me-kind-chips .cdx-skind-chip.cdx-type-active').data('kind') || STATE_KINDS.FACE;
+    const lean = {};
+    ['valence', 'arousal', 'dominance'].forEach(axis => {
+        lean[axis] = $(`.cdx-lean-chip[data-axis="${axis}"].cdx-type-active`).data('sign') || 'any';
+    });
+
     if (!name) { toastr.warning('Mode needs a name'); return; }
 
     if (editingId) {
-        updateState(editingId, { name, express, suppress, is_default: isDefault, leanings });
+        updateState(editingId, { name, express, suppress, is_default: isDefault, leanings, kind, lean });
     } else {
-        const s = addState(name, express, suppress, isDefault, leanings);
+        const s = addState(name, express, suppress, isDefault, { leanings, kind, lean });
         if (s && isDefault) setActiveState(s.id);
     }
 
