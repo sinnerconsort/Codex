@@ -409,3 +409,47 @@
 .cdx-pane .cdx-qa-row,
 .cdx-pane .cdx-mode-item { min-width: 0; }
 .cdx-field-input { max-width: 100%; }
+
+/* ── Status strip (persistent character readout, under the tabs) ─────────── */
+.cdx-status {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+}
+.cdx-status-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+.cdx-status-mode {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #cfc8e6;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cdx-status-top .cdx-dim { flex-shrink: 0; font-size: 11px; }
+.cdx-status-vad { min-width: 0; }
+
+/* Status strip — meta line (threads + disposition) */
+.cdx-status-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin-top: 6px;
+    font-size: 11px;
+    opacity: 0.6;
+}
+.cdx-status-chip {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cdx-status-hot { color: #c9b8e6; opacity: 0.95; }
