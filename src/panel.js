@@ -275,13 +275,18 @@ function createPanel() {
       <div class="cdx-header">
         <span class="cdx-char-name" id="cdx-char-name"></span>
         <div class="cdx-header-actions">
-          <button class="cdx-icon-btn" id="cdx-settings-toggle" title="Settings">⚙️</button>
           <button class="cdx-icon-btn" id="cdx-close">✕</button>
         </div>
       </div>
 
-      <!-- ── Main Profile View ── -->
-      <div class="cdx-main" id="cdx-main">
+      <div class="cdx-tabs">
+        <button class="cdx-tab cdx-tab-active" data-tab="profile">Profile</button>
+        <button class="cdx-tab" data-tab="modes">Modes</button>
+        <button class="cdx-tab" data-tab="settings">Settings</button>
+      </div>
+
+      <!-- ── Profile pane ── -->
+      <div class="cdx-main cdx-pane" id="cdx-main" data-pane="profile">
 
         <!-- What's Changed -->
         <div class="cdx-field-section">
@@ -373,12 +378,8 @@ function createPanel() {
         </div>
       </div>
 
-      <!-- ── Settings (slides over main) ── -->
-      <div class="cdx-settings" id="cdx-settings" style="display:none;">
-        <div class="cdx-field-bar">
-          <span class="cdx-field-label">Settings</span>
-          <button class="cdx-icon-btn" id="cdx-settings-close">✕</button>
-        </div>
+      <!-- ── Settings pane ── -->
+      <div class="cdx-settings cdx-pane" id="cdx-settings" data-pane="settings" style="display:none;">
 
         <label class="cdx-check"><input type="checkbox" id="cdx-s-enabled" /> Enable Codex</label>
         <label class="cdx-check"><input type="checkbox" id="cdx-s-nudge" /> Memory nudge notifications</label>
@@ -401,6 +402,11 @@ function createPanel() {
           <input type="range" id="cdx-s-vadcd" min="1" max="6" value="2" />
         </div>
 
+        <button class="cdx-text-btn cdx-danger" id="cdx-clear-memories" style="margin-top:16px;">Clear all memories</button>
+      </div>
+
+      <!-- ── Modes pane ── -->
+      <div class="cdx-pane" id="cdx-pane-modes" data-pane="modes" style="display:none;">
         <!-- Behavioral Modes (power user) -->
         <div class="cdx-modes-section">
           <div class="cdx-field-bar" style="margin-top:14px;">
@@ -455,8 +461,6 @@ function createPanel() {
             <button class="cdx-icon-btn" id="cdx-me-cancel">✕</button>
           </div>
         </div>
-
-        <button class="cdx-text-btn cdx-danger" id="cdx-clear-memories" style="margin-top:16px;">Clear all memories</button>
       </div>
 
     </div>
@@ -488,20 +492,9 @@ function createPanel() {
 function bindEvents() {
     $(document).on('click', '#cdx-close', () => $('#codex-panel').fadeOut(150));
 
-    // Settings toggle
-    $(document).on('click', '#cdx-settings-toggle', () => {
-        if ($('#cdx-settings').is(':visible')) {
-            $('#cdx-settings').slideUp(150);
-            $('#cdx-main').slideDown(150);
-        } else {
-            renderSettings();
-            $('#cdx-main').slideUp(150);
-            $('#cdx-settings').slideDown(150);
-        }
-    });
-    $(document).on('click', '#cdx-settings-close', () => {
-        $('#cdx-settings').slideUp(150);
-        $('#cdx-main').slideDown(150);
+    // Tabs (Profile / Modes / Settings)
+    $(document).on('click', '.cdx-tab', function () {
+        switchTab($(this).data('tab'));
     });
 
     // ── Three fields — auto-save on blur ─────────────────────────────────
@@ -717,6 +710,25 @@ function renderPanel() {
     renderMemories();
     renderThreads();
     renderVad();
+
+    switchTab('profile');   // always open on Profile
+}
+
+// Show one tab's pane, hide the others, and tidy transient surfaces.
+function switchTab(tab) {
+    $('.cdx-tab').removeClass('cdx-tab-active');
+    $(`.cdx-tab[data-tab="${tab}"]`).addClass('cdx-tab-active');
+
+    $('#cdx-main').toggle(tab === 'profile');
+    $('#cdx-pane-modes').toggle(tab === 'modes');
+    $('#cdx-settings').toggle(tab === 'settings');
+
+    // leaving Profile closes its quick-adds; leaving Modes closes the editor
+    $('#cdx-quick-add, #cdx-thr-add').hide();
+    if (tab !== 'modes') $('#cdx-mode-editor').hide();
+
+    if (tab === 'settings') renderSettings();
+    if (tab === 'modes') renderModes();
 }
 
 // ─── VAD Readout ─────────────────────────────────────────────────────────────
