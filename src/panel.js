@@ -424,25 +424,27 @@ function createPanel() {
           <textarea id="cdx-me-suppress" class="cdx-field-input" rows="2" placeholder="What the AI should NOT assume…"></textarea>
 
           <div class="cdx-field-bar" style="margin-top:8px;">
-            <span class="cdx-field-label" style="font-size:0.8em;">Mode type</span>
-            <span id="cdx-me-kind-chips" style="display:inline-flex;gap:6px;">
+            <span class="cdx-field-label" style="margin:0;">Type</span>
+            <span id="cdx-me-kind-chips" style="display:flex;flex-wrap:wrap;gap:5px;">
               ${Object.entries(STATE_KIND_META).map(([k, v]) =>
-                `<button class="cdx-type-chip cdx-skind-chip" data-kind="${k}" title="${v.desc}" style="width:auto;padding:3px 11px;border-radius:13px;font-size:0.78em;">${v.icon} ${v.label}</button>`
+                `<button type="button" class="cdx-type-chip cdx-skind-chip" data-kind="${k}" title="${v.desc}" style="width:auto;height:24px;padding:0 10px;border-radius:12px;font-size:11px;">${v.icon} ${v.label}</button>`
               ).join('')}
             </span>
           </div>
 
-          <div id="cdx-me-lean-wrap" style="margin-top:6px;">
-            <div class="cdx-hint" style="margin-bottom:2px;">Reacts to (emotional lean): the VAD region where this face surfaces. <b>·</b> ignores that axis. Sparse, distinguishing leans work best.</div>
-            ${['valence', 'arousal', 'dominance'].map(axis => `
-            <div style="display:flex;align-items:center;gap:6px;margin:3px 0;">
-              <span class="cdx-dim" style="width:74px;font-size:0.78em;text-transform:capitalize;">${axis}</span>
-              <span style="display:inline-flex;gap:5px;">
-                ${['neg', 'neutral', 'pos', 'any'].map(sign =>
-                  `<button class="cdx-type-chip cdx-lean-chip" data-axis="${axis}" data-sign="${sign}" title="${LEAN_SIGN_META[sign].desc}">${LEAN_SIGN_META[sign].label}</button>`
-                ).join('')}
-              </span>
-            </div>`).join('')}
+          <div id="cdx-me-lean-wrap" style="margin-top:6px;box-sizing:border-box;max-width:100%;overflow-x:hidden;">
+            <div class="cdx-hint" style="margin:0 0 4px;">Reacts to: the VAD region where this face surfaces. <b>·</b> = ignore axis. Sparse leans work best.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px 14px;">
+              ${['valence', 'arousal', 'dominance'].map(axis => `
+              <span style="display:flex;align-items:center;gap:5px;">
+                <span class="cdx-dim" style="font-size:11px;text-transform:capitalize;min-width:62px;">${axis}</span>
+                <span style="display:flex;gap:4px;">
+                  ${['neg', 'neutral', 'pos', 'any'].map(sign =>
+                    `<button type="button" class="cdx-type-chip cdx-lean-chip" data-axis="${axis}" data-sign="${sign}" title="${LEAN_SIGN_META[sign].desc}" style="width:24px;height:24px;font-size:11px;">${LEAN_SIGN_META[sign].label}</button>`
+                  ).join('')}
+                </span>
+              </span>`).join('')}
+            </div>
           </div>
           <div class="cdx-hint">Disposition (optional): threads matching <b>fixates</b> linger &amp; build pressure; <b>ignores</b> fade fast.</div>
           <input type="text" id="cdx-me-fixates" class="cdx-field-input" placeholder="Fixates on (comma-separated: the locked door, her past)" />
