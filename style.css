@@ -464,3 +464,14 @@
 #cdx-me-lean-wrap,
 #cdx-me-lean-wrap > div { min-width: 0; max-width: 100%; }
 #cdx-me-lean-wrap > div > span { min-width: 0; }
+
+/* Backstop: SillyTavern's global input styling can out-specify .cdx-field-input
+   and knock our inputs off width:100% (so adjacent ones sit side-by-side).
+   This id-scoped rule out-specifies the host and keeps every panel field
+   block-level and full-width. */
+#codex-panel input.cdx-field-input,
+#codex-panel textarea.cdx-field-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+}
